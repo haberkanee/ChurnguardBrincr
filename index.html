@@ -1067,7 +1067,7 @@ function renderKlanten(){
   if(kf.status==='Gechurnd')list=[];else if(kf.status!=='Alle')list=list.filter(c=>c.risk.label===kf.status);
   if(kf.search)list=list.filter(c=>c.id.toUpperCase().includes(kf.search.toUpperCase()));
   if(kf.sort==='orders')list.sort((a,b)=>a.risk.recent-b.risk.recent);else if(kf.sort==='act')list.sort((a,b)=>b.act-a.act);else list.sort((a,b)=>b.risk.score-a.risk.score);
-  const GT='104px 100px 96px 72px 74px 80px 130px 96px 48px';
+  const GT='104px 96px 88px 64px 68px 76px 116px 92px 72px minmax(160px,1fr)';
   return `<div class="page">
     <div class="page-head"><h1 class="page-h1">Klanten</h1><p class="page-desc">Volledig overzicht van alle actieve klanten en hun risicoprofiel.</p></div>
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
@@ -1078,7 +1078,7 @@ function renderKlanten(){
     </div>
     ${kf.status==='Gechurnd'?`<div class="card"><div class="card-head"><div><div class="card-title">Gechurnde klanten</div><div class="card-sub">Reeds opgezegd — geen actie meer mogelijk</div></div></div>${CHURNED.map(c=>`<div class="lrow" style="cursor:default"><span class="cid">${c.id}</span><span class="tag">${c.branche}</span><span class="cmeta" style="flex:1">${c.reden}</span><span style="font-family:var(--mono);color:var(--crit);font-size:12px;font-weight:600">−${H.eur(c.mrr)}</span></div>`).join('')}</div>`:`
     <div class="card">
-      <div class="tbl-h desk" style="grid-template-columns:${GT}"><div>Klantcode</div><div>Branche</div><div>Subscr.</div><div>Orders</div><div>Inactief</div><div>Koppeling</div><div>Risicoscore</div><div>Status</div><div>Actie</div></div>
+      <div class="tbl-h desk" style="grid-template-columns:${GT}"><div>Klantcode</div><div>Branche</div><div>Subscr.</div><div>Orders</div><div>Inactief</div><div>Koppeling</div><div>Risicoscore</div><div>Status</div><div>Actie</div><div>Notitie</div></div>
       <div style="max-height:calc(100dvh - 300px);overflow-y:auto"><div class="stagger">
       ${list.length===0?`<div style="padding:48px;text-align:center;color:var(--ink3)">Geen klanten gevonden.</div>`:''}
       ${list.map(c=>`
@@ -1093,6 +1093,7 @@ function renderKlanten(){
             <button class="act-btn" onclick="event.stopPropagation();openActionModal('${c.id}','notitie')" title="Notitie toevoegen"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 2.5h6L13 5.5v8a1 1 0 01-1 1H4a1 1 0 01-1-1v-10a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.5 7.5h5M5.5 10h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
             <button class="act-btn" onclick="event.stopPropagation();toggleActionMenu('${c.id}')" title="Actie uitvoeren"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg></button>
           </div>
+          <div id="notecell-${c.id}" style="display:flex;align-items:center;min-width:0">${noteCellHtml(c.id)}</div>
         </div>
         <div class="lrow mob"><div style="flex:1;min-width:0" onclick="openDetail('${c.id}')"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="cid">${c.id}</span>${H.badge(c.risk)}</div><div class="cmeta" style="margin-bottom:7px">${c.branche} · ${c.sub}</div>${H.sbar(c.risk.score,c.risk.color)}</div><button class="act-btn" style="margin-left:8px;flex-shrink:0" onclick="event.stopPropagation();toggleActionMenu('${c.id}')"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg></button><span style="font-size:18px;font-weight:800;color:${c.risk.color};margin-left:10px" onclick="openDetail('${c.id}')">${c.risk.score}</span></div>
       `).join('')}
@@ -1225,16 +1226,23 @@ function pCSV(f){
       if(sb){
         (async()=>{
           try{
-            await sb.from('klanten').delete().neq('klant_id',-1); // leeg de tabel
+            const del=await sb.from('klanten').delete().neq('klant_id',-1); // leeg de tabel
+            if(del.error){console.error('Verwijderen oude klanten:',del.error);showToast('Opslaan mislukt: '+(del.error.message||'kon tabel niet legen'),'error');return;}
             const rows=impParsed.map(c=>({klantcode:c.id,branche:c.branche,subscriptie:c.sub,maandbedrag:c.bedrag[c.bedrag.length-1],aantal_orders:c.orders[c.orders.length-1],dagen_inactief:c.act,boekhoudkoppeling:c.kop,partner:c.partner,onboarding_voltooid:c.onb,status:'actief',orders_historie:c.orders,bedrag_historie:c.bedrag}));
-            // in batches van 500 invoegen
-            for(let i=0;i<rows.length;i+=500){await sb.from('klanten').insert(rows.slice(i,i+500));}
+            // in batches van 200 invoegen, met foutcontrole per batch
+            let saved=0;
+            for(let i=0;i<rows.length;i+=200){
+              const ins=await sb.from('klanten').insert(rows.slice(i,i+200));
+              if(ins.error){console.error('Insert batch fout:',ins.error);showToast('Opslaan mislukt bij rij '+i+': '+(ins.error.message||''),'error');return;}
+              saved+=rows.slice(i,i+200).length;
+            }
             await sb.from('importbatches').insert({gebruiker_naam:ME?ME.name:null,bestandsnaam:f.name,aantal_rijen:impParsed.length,resultaat:'ok'});
-          }catch(e){console.error('Klanten opslaan in DB mislukt:',e);showToast('Let op: opslaan in database mislukt, data is wel zichtbaar.','error');}
+            showToast(saved+' klanten opgeslagen in de database ✓','success');
+          }catch(e){console.error('Klanten opslaan in DB mislukt:',e);showToast('Opslaan in database mislukt: '+(e.message||e),'error');}
         })();
       }
       logAction('Klantdata geïmporteerd ('+impParsed.length+' klanten)','CSV');
-      showToast(impParsed.length+' klanten geïmporteerd en opgeslagen.','success');
+      showToast(impParsed.length+' klanten geïmporteerd.','success');
       render();
     }catch(err){
       console.error('Import fout:',err);
@@ -1356,6 +1364,20 @@ function submitAction(id,actionKey){
 function updateNoteBadge(id){
   const holder=document.getElementById('notebadge-'+id);
   if(holder)holder.outerHTML=noteBadgeHtml(id);
+  const cell=document.getElementById('notecell-'+id);
+  if(cell)cell.innerHTML=noteCellHtml(id);
+}
+// Toont de meest recente notitie in de klantenlijst, met verwijderknop
+function noteCellHtml(id){
+  const notes=CLIENT_NOTES[id]||[];
+  if(!notes.length)return `<button onclick="event.stopPropagation();openActionModal('${id}','notitie')" style="font-size:11.5px;color:var(--ink4);background:none;border:1px dashed var(--line);border-radius:7px;padding:4px 9px;cursor:pointer">+ notitie</button>`;
+  const n=notes[0];
+  const more=notes.length>1?`<span style="font-size:10px;color:var(--ink4);flex-shrink:0">+${notes.length-1}</span>`:'';
+  return `<div style="display:flex;align-items:center;gap:6px;min-width:0;width:100%">
+    <span onclick="event.stopPropagation();openDetail('${id}')" title="${(n.text||'').replace(/"/g,'&quot;')}" style="flex:1;min-width:0;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer">${n.text||n.label}</span>
+    ${more}
+    <button onclick="event.stopPropagation();deleteNote('${id}',0)" title="Verwijder nieuwste notitie" style="flex-shrink:0;width:24px;height:24px;border:none;background:none;cursor:pointer;color:var(--ink4);border-radius:6px;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='var(--crit-soft)';this.style.color='var(--crit)'" onmouseout="this.style.background='none';this.style.color='var(--ink4)'"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 4.5h10M6.5 4.5V3.5a1 1 0 011-1h1a1 1 0 011 1v1M5 4.5l.5 8a1 1 0 001 1h3a1 1 0 001-1l.5-8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>`;
 }
 function noteBadgeHtml(id){
   const n=noteCount(id);
