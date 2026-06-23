@@ -799,8 +799,19 @@ async function doLogin(ev){
   failCount=0;ME=mapUser(row);
   // werk laatste_login bij in de database
   try{ await sb.from('gebruikers').update({laatste_login:new Date().toISOString()}).eq('gebruiker_id',row.gebruiker_id); }catch(e){}
+  saveSession(row.gebruiker_id);  // onthoud wie is ingelogd (overleeft verversen)
   document.getElementById('login-error').style.display='none';
   document.getElementById('login-success').style.display='none';
+  await enterApp(true);
+  logAction('Ingelogd',ME.email.split('@')[0]);
+  return false;
+}
+// Bewaart / herstelt de actieve sessie zodat verversen niet uitlogt
+const SESSION_KEY='churnguard_session';
+function saveSession(userId){try{localStorage.setItem(SESSION_KEY,JSON.stringify({id:userId,t:Date.now()}));}catch(e){}}
+function clearSession(){try{localStorage.removeItem(SESSION_KEY);}catch(e){}}
+// Toont de app-shell voor de huidige ME en laadt de data
+async function enterApp(loadData){
   document.getElementById('login').classList.add('hidden');
   document.getElementById('shell').classList.add('active');
   document.getElementById('sb-av').textContent=ME.av;
@@ -809,14 +820,28 @@ async function doLogin(ev){
   document.getElementById('sb-role').textContent=ME.email;
   buildNav();
   startSession();
-  await loadAllData();
-  logAction('Ingelogd',ME.email.split('@')[0]);
+  if(loadData)await loadAllData();
   tab='dashboard';go('dashboard');
-  return false;
+}
+// Probeert bij het laden van de pagina een bestaande sessie te herstellen
+async function restoreSession(){
+  if(!sb)return false;
+  let s=null;try{s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch(e){}
+  if(!s||!s.id)return false;
+  // sessie ouder dan 30 min? dan niet herstellen
+  if(Date.now()-s.t>SESSION_MS){clearSession();return false;}
+  try{
+    const {data}=await sb.from('gebruikers').select('*').eq('gebruiker_id',s.id).maybeSingle();
+    if(!data)return false;
+    ME=mapUser(data);
+    saveSession(s.id); // ververs tijdstempel
+    await enterApp(true);
+    return true;
+  }catch(e){console.error('Sessie herstellen mislukt:',e);return false;}
 }
 function logout(reason){
   if(ME)logAction('Uitgelogd',ME.email.split('@')[0]);
-  ME=null;clearInterval(sessionTimer);
+  ME=null;clearInterval(sessionTimer);clearSession();
   document.getElementById('shell').classList.remove('active');
   document.getElementById('login').classList.remove('hidden');
   document.getElementById('login-pw').value='';
@@ -1067,7 +1092,7 @@ function renderKlanten(){
   if(kf.status==='Gechurnd')list=[];else if(kf.status!=='Alle')list=list.filter(c=>c.risk.label===kf.status);
   if(kf.search)list=list.filter(c=>c.id.toUpperCase().includes(kf.search.toUpperCase()));
   if(kf.sort==='orders')list.sort((a,b)=>a.risk.recent-b.risk.recent);else if(kf.sort==='act')list.sort((a,b)=>b.act-a.act);else list.sort((a,b)=>b.risk.score-a.risk.score);
-  const GT='104px 96px 88px 64px 68px 76px 116px 92px 72px minmax(160px,1fr)';
+  const GT='104px 96px 88px 64px 68px 76px 116px 92px minmax(180px,1fr)';
   return `<div class="page">
     <div class="page-head"><h1 class="page-h1">Klanten</h1><p class="page-desc">Volledig overzicht van alle actieve klanten en hun risicoprofiel.</p></div>
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
@@ -1078,7 +1103,7 @@ function renderKlanten(){
     </div>
     ${kf.status==='Gechurnd'?`<div class="card"><div class="card-head"><div><div class="card-title">Gechurnde klanten</div><div class="card-sub">Reeds opgezegd — geen actie meer mogelijk</div></div></div>${CHURNED.map(c=>`<div class="lrow" style="cursor:default"><span class="cid">${c.id}</span><span class="tag">${c.branche}</span><span class="cmeta" style="flex:1">${c.reden}</span><span style="font-family:var(--mono);color:var(--crit);font-size:12px;font-weight:600">−${H.eur(c.mrr)}</span></div>`).join('')}</div>`:`
     <div class="card">
-      <div class="tbl-h desk" style="grid-template-columns:${GT}"><div>Klantcode</div><div>Branche</div><div>Subscr.</div><div>Orders</div><div>Inactief</div><div>Koppeling</div><div>Risicoscore</div><div>Status</div><div>+ Notitie</div><div>Notitie</div></div>
+      <div class="tbl-h desk" style="grid-template-columns:${GT}"><div>Klantcode</div><div>Branche</div><div>Subscr.</div><div>Orders</div><div>Inactief</div><div>Koppeling</div><div>Risicoscore</div><div>Status</div><div>Notitie</div></div>
       <div style="max-height:calc(100dvh - 300px);overflow-y:auto"><div class="stagger">
       ${list.length===0?`<div style="padding:48px;text-align:center;color:var(--ink3)">Geen klanten gevonden.</div>`:''}
       ${list.map(c=>`
@@ -1089,9 +1114,6 @@ function renderKlanten(){
           <div onclick="openDetail('${c.id}')">${c.kop?'<span style="color:var(--low);font-weight:700">✓</span>':'<span style="color:var(--crit);font-weight:700">✗</span>'}</div>
           <div style="display:flex;align-items:center;gap:9px" onclick="openDetail('${c.id}')">${H.sbar(c.risk.score,c.risk.color)}<span style="font-family:var(--mono);font-size:13px;font-weight:600;color:${c.risk.color};min-width:22px">${c.risk.score}</span></div>
           <div onclick="openDetail('${c.id}')">${H.badge(c.risk)}</div>
-          <div style="position:relative;display:flex;justify-content:center;gap:4px">
-            <button class="act-btn" onclick="event.stopPropagation();openActionModal('${c.id}','notitie')" title="Notitie toevoegen"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 2.5h6L13 5.5v8a1 1 0 01-1 1H4a1 1 0 01-1-1v-10a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.5 7.5h5M5.5 10h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
-          </div>
           <div id="notecell-${c.id}" style="display:flex;align-items:center;min-width:0">${noteCellHtml(c.id)}</div>
         </div>
         <div class="lrow mob"><div style="flex:1;min-width:0" onclick="openDetail('${c.id}')"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="cid">${c.id}</span>${H.badge(c.risk)}</div><div class="cmeta" style="margin-bottom:7px">${c.branche} · ${c.sub}</div>${H.sbar(c.risk.score,c.risk.color)}</div><button class="act-btn" style="margin-left:8px;flex-shrink:0" onclick="event.stopPropagation();openActionModal('${c.id}','notitie')" title="Notitie toevoegen"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 2.5h6L13 5.5v8a1 1 0 01-1 1H4a1 1 0 01-1-1v-10a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.5 7.5h5M5.5 10h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button><span style="font-size:18px;font-weight:800;color:${c.risk.color};margin-left:10px" onclick="openDetail('${c.id}')">${c.risk.score}</span></div>
@@ -1486,8 +1508,9 @@ document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){
 
 // INIT — toont registratie/login scherm (shell is verborgen tot login)
 switchAuth('login');
-// Controleer bij het laden of de database bereikbaar is en de tabellen bestaan
-(async function dbHealthCheck(){
+// Controleer bij het laden of de database bereikbaar is en de tabellen bestaan,
+// en herstel daarna een eventuele actieve sessie (zodat verversen niet uitlogt)
+(async function init(){
   if(!sb){console.warn('Supabase niet geïnitialiseerd');return;}
   try{
     const {error}=await sb.from('gebruikers').select('gebruiker_id',{head:true,count:'exact'});
@@ -1497,10 +1520,12 @@ switchAuth('login');
       if(/relation|does not exist|table|schema cache/i.test(msg)){
         authError('Let op: de database-tabellen bestaan nog niet. Voer het SQL-script uit in Supabase (SQL Editor → Run) voordat je registreert.');
       }
-    }else{
-      console.log('%c✓ Database verbonden — tabellen gevonden','color:#247a59;font-weight:bold');
+      return;
     }
-  }catch(e){console.error('DB health check exception:',e);}
+    console.log('%c✓ Database verbonden — tabellen gevonden','color:#247a59;font-weight:bold');
+    // herstel actieve sessie indien aanwezig
+    await restoreSession();
+  }catch(e){console.error('Init exception:',e);}
 })();
 </script>
 </body>
