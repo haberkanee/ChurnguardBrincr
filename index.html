@@ -503,9 +503,11 @@ function relTime(ts){
 async function loadAllData(){
   if(!sb)return;
   try{
-    // KLANTEN
-    const {data:kl}=await sb.from('klanten').select('*').order('klant_id',{ascending:true});
+    // KLANTEN — haal alle klanten op (expliciete hoge limiet zodat alle 547 meekomen)
+    const {data:kl,error:klErr}=await sb.from('klanten').select('*').order('klant_id',{ascending:true}).limit(5000);
+    if(klErr){console.error('Klanten laden fout:',klErr);showToast('Klanten laden mislukt: '+(klErr.message||''),'error');}
     if(kl&&kl.length){
+      console.log('%c✓ '+kl.length+' klanten geladen uit database','color:#247a59;font-weight:bold');
       const arr=kl.map(r=>({
         id:r.klantcode, branche:r.branche||'Overig', sub:r.subscriptie||'Onbekend',
         orders:r.orders_historie||[0,0,0,0,0,r.aantal_orders||0],
@@ -513,6 +515,8 @@ async function loadAllData(){
         act:r.dagen_inactief||0, kop:!!r.boekhoudkoppeling, partner:!!r.partner, onb:r.onboarding_voltooid!==false
       }));
       rebuildCustomers(arr);
+    }else{
+      console.warn('Geen klanten in database geladen (kl is leeg). Demo-data blijft staan.');
     }
     // ACTIES / NOTITIES
     CLIENT_NOTES={};
@@ -822,6 +826,7 @@ async function enterApp(loadData){
   startSession();
   if(loadData)await loadAllData();
   tab='dashboard';go('dashboard');
+  render(); // herteken met de geladen databasegegevens
 }
 // Probeert bij het laden van de pagina een bestaande sessie te herstellen
 async function restoreSession(){
