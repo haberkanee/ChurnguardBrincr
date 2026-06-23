@@ -397,10 +397,10 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
       <button class="nav-item" data-tab="import" onclick="go('import')"><svg class="ni" viewBox="0 0 20 20" fill="none"><path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13v2.5A1.5 1.5 0 004.5 17h11a1.5 1.5 0 001.5-1.5V13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Data-import</button>
     </nav>
     <div class="sidebar-foot">
-      <button class="user-chip" onclick="logout()" title="Uitloggen">
+      <button class="user-chip" onclick="openProfile()" title="Mijn profiel">
         <div class="avatar" id="sb-av">CS</div>
         <div class="user-meta"><div class="user-name" id="sb-name">—</div><div class="user-role" id="sb-role">—</div></div>
-        <svg width="16" height="16" viewBox="0 0 18 18" fill="none" style="color:var(--ink4);flex-shrink:0"><path d="M7 15H4a1.5 1.5 0 01-1.5-1.5v-9A1.5 1.5 0 014 3h3M11.5 12l3-3-3-3M14 9H6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg width="15" height="15" viewBox="0 0 18 18" fill="none" style="color:var(--ink4);flex-shrink:0"><path d="M6.5 4.5l5 4.5-5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </div>
   </aside>
@@ -429,6 +429,7 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
 <div id="action-menu"></div>
 <div id="dist-pop" style="display:none;position:fixed;z-index:350;background:var(--surface);border:1px solid var(--line);border-radius:11px;box-shadow:var(--sh-lg);padding:10px 12px;max-width:240px;pointer-events:none"></div>
 <div class="ov" id="action-ov" onclick="closeActionModal(event)"><div class="sheet sheet-sm" id="action-sheet"></div></div>
+<div class="ov" id="profile-ov" onclick="closeProfile(event)"><div class="sheet sheet-sm" id="profile-sheet"></div></div>
 <script>
 // DATA
 const RAW=[
@@ -571,9 +572,10 @@ async function dbEmailExists(email){
 function mapUser(row){
   return {
     id:row.gebruiker_id, email:row.email, name:row.naam, pw:row.wachtwoord,
-    role:row.rol, geverifieerd:row.geverifieerd,
+    role:row.rol, functie:row.functie||row.rol||'Medewerker', geverifieerd:row.geverifieerd,
     av:initials(row.naam), color:AVATAR_COLORS[(row.gebruiker_id||0)%AVATAR_COLORS.length],
-    perms:row.rol&&row.rol.includes('Teamlead')?["dashboard","klanten","alerts","audit","import"]:["dashboard","klanten","alerts"]
+    // Voorlopig krijgt iedereen dezelfde (volledige) rechten
+    perms:["dashboard","klanten","alerts","audit","import"]
   };
 }
 const AVATAR_COLORS=["#247a59","#2f9e74","#5cb89a","#1f7a4d","#3d9b7a"];
@@ -820,6 +822,117 @@ function logout(reason){
   document.getElementById('login-pw').value='';
   switchAuth('login');
   if(reason==='timeout')authError('Je sessie is verlopen wegens inactiviteit. Log opnieuw in.');
+}
+
+// ════════════════ MIJN PROFIEL ════════════════
+const FUNCTIES=["Support Specialist","Consultant","Customer Success Manager","Customer Success Teamlead","Accountmanager","Onboarding Specialist","Sales","Manager"];
+function openProfile(){
+  if(!ME)return;
+  const opts=FUNCTIES.map(f=>`<option${(ME.functie===f)?' selected':''}>${f}</option>`).join('');
+  const selectedKnown=FUNCTIES.includes(ME.functie);
+  document.getElementById('profile-sheet').innerHTML=`
+    <div class="card-head" style="position:sticky;top:0;background:var(--surface);z-index:5;border-radius:var(--rx) var(--rx) 0 0">
+      <div style="display:flex;align-items:center;gap:13px">
+        <div class="avatar" style="width:46px;height:46px;border-radius:13px;font-size:16px;background:${ME.color}">${ME.av}</div>
+        <div><div class="card-sub" style="margin-bottom:1px">Mijn profiel</div><div class="card-title" style="font-size:17px">${ME.name}</div></div>
+      </div>
+      <button class="tb-btn" onclick="closeProfile()" style="box-shadow:none">✕</button>
+    </div>
+    <div style="padding:21px;display:flex;flex-direction:column;gap:16px">
+      <div id="profile-msg" style="display:none"></div>
+
+      <div>
+        <div class="sec" style="margin-bottom:10px">Gegevens</div>
+        <label class="fld-l">Volledige naam</label>
+        <input type="text" id="pf-name" class="auth-in" value="${(ME.name||'').replace(/"/g,'&quot;')}" style="margin-bottom:13px"/>
+        <label class="fld-l">E-mailadres</label>
+        <input type="email" id="pf-email" class="auth-in" value="${(ME.email||'').replace(/"/g,'&quot;')}" style="margin-bottom:13px"/>
+        <label class="fld-l">Functie</label>
+        <select id="pf-functie" class="auth-in">${opts}${selectedKnown?'':`<option selected>${ME.functie||''}</option>`}</select>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end">
+        <button class="btn btn-pri" onclick="saveProfile()">Gegevens opslaan</button>
+      </div>
+
+      <div style="border-top:1px solid var(--line);padding-top:16px">
+        <div class="sec" style="margin-bottom:10px">Wachtwoord wijzigen</div>
+        <label class="fld-l">Huidig wachtwoord</label>
+        <input type="password" id="pf-cur" class="auth-in" placeholder="••••••••" style="margin-bottom:13px"/>
+        <label class="fld-l">Nieuw wachtwoord</label>
+        <input type="password" id="pf-new" class="auth-in" placeholder="Minimaal 8 tekens, hoofdletter + cijfer" style="margin-bottom:13px"/>
+        <label class="fld-l">Bevestig nieuw wachtwoord</label>
+        <input type="password" id="pf-new2" class="auth-in" placeholder="••••••••" style="margin-bottom:14px"/>
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn btn-gh" onclick="changePassword()">Wachtwoord wijzigen</button>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--line);padding-top:16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <span style="font-size:12.5px;color:var(--ink3)">Wil je de sessie afsluiten?</span>
+        <button class="btn btn-gh" onclick="closeProfile();logout()" style="color:var(--crit);border-color:var(--crit-soft)">
+          <svg width="15" height="15" viewBox="0 0 18 18" fill="none" style="margin-right:2px"><path d="M7 15H4a1.5 1.5 0 01-1.5-1.5v-9A1.5 1.5 0 014 3h3M11.5 12l3-3-3-3M14 9H6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Uitloggen
+        </button>
+      </div>
+    </div>`;
+  document.getElementById('profile-ov').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeProfile(e){if(e&&e.target!==document.getElementById('profile-ov'))return;document.getElementById('profile-ov').classList.remove('open');document.body.style.overflow='';}
+function profileMsg(msg,type){
+  const el=document.getElementById('profile-msg');if(!el)return;
+  const col=type==='error'?'var(--crit)':'var(--green-d)';const bg=type==='error'?'var(--crit-soft)':'var(--green-soft)';
+  el.style.display='block';el.style.cssText=`display:block;background:${bg};border:1px solid ${col};color:${col};border-radius:9px;padding:10px 13px;font-size:12.5px`;
+  el.textContent=msg;
+}
+async function saveProfile(){
+  const name=document.getElementById('pf-name').value.trim();
+  const email=document.getElementById('pf-email').value.trim().toLowerCase();
+  const functie=document.getElementById('pf-functie').value;
+  if(!name||name.split(/\s+/).length<2){profileMsg('Vul je voor- en achternaam in.','error');return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){profileMsg('Voer een geldig e-mailadres in.','error');return;}
+  if(!sb){profileMsg('Geen databaseverbinding.','error');return;}
+  try{
+    // controleer of e-mail al door iemand anders gebruikt wordt
+    if(email!==ME.email){
+      const {data:exist}=await sb.from('gebruikers').select('gebruiker_id').eq('email',email).maybeSingle();
+      if(exist){profileMsg('Dit e-mailadres is al in gebruik door een ander account.','error');return;}
+    }
+    const {error}=await sb.from('gebruikers').update({naam:name,email:email,functie:functie}).eq('gebruiker_id',ME.id);
+    if(error){
+      if(/column .*functie.* does not exist|functie/i.test(error.message||'')){
+        // functie-kolom bestaat nog niet: sla de rest op en meld het
+        await sb.from('gebruikers').update({naam:name,email:email}).eq('gebruiker_id',ME.id);
+        profileMsg('Naam en e-mail opgeslagen. Voeg de kolom "functie" toe in de database om ook de functie te bewaren.','error');
+      }else{profileMsg('Opslaan mislukt: '+(error.message||''),'error');return;}
+    }else{
+      profileMsg('Je gegevens zijn opgeslagen.','success');
+    }
+    ME.name=name;ME.email=email;ME.functie=functie;ME.av=initials(name);
+    document.getElementById('sb-name').textContent=name;
+    document.getElementById('sb-role').textContent=email;
+    document.getElementById('sb-av').textContent=ME.av;
+    logAction('Profiel bijgewerkt',ME.email.split('@')[0]);
+  }catch(e){console.error(e);profileMsg('Er ging iets mis bij het opslaan.','error');}
+}
+async function changePassword(){
+  const cur=document.getElementById('pf-cur').value;
+  const nw=document.getElementById('pf-new').value;
+  const nw2=document.getElementById('pf-new2').value;
+  if(!cur||!nw||!nw2){profileMsg('Vul alle wachtwoordvelden in.','error');return;}
+  if(cur!==ME.pw){profileMsg('Je huidige wachtwoord is onjuist.','error');return;}
+  if(nw.length<8||!/[A-Z]/.test(nw)||!/[0-9]/.test(nw)){profileMsg('Nieuw wachtwoord: minimaal 8 tekens, met een hoofdletter en een cijfer.','error');return;}
+  if(nw!==nw2){profileMsg('De nieuwe wachtwoorden komen niet overeen.','error');return;}
+  if(!sb){profileMsg('Geen databaseverbinding.','error');return;}
+  try{
+    const {error}=await sb.from('gebruikers').update({wachtwoord:nw}).eq('gebruiker_id',ME.id);
+    if(error){profileMsg('Wachtwoord wijzigen mislukt: '+(error.message||''),'error');return;}
+    ME.pw=nw;
+    document.getElementById('pf-cur').value='';document.getElementById('pf-new').value='';document.getElementById('pf-new2').value='';
+    profileMsg('Je wachtwoord is gewijzigd.','success');
+    logAction('Wachtwoord gewijzigd',ME.email.split('@')[0]);
+  }catch(e){console.error(e);profileMsg('Er ging iets mis bij het wijzigen.','error');}
 }
 function startSession(){
   lastActivity=Date.now();
@@ -1324,7 +1437,7 @@ function drawCharts(){
   cdestroy('donut');const dn=document.getElementById('donut');
   if(dn){const k=CUSTOMERS.filter(c=>c.risk.label==='Kritiek').length,hh=CUSTOMERS.filter(c=>c.risk.label==='Hoog').length,m=CUSTOMERS.filter(c=>c.risk.label==='Middel').length,l=CUSTOMERS.filter(c=>c.risk.label==='Laag').length;const labelsArr=['Kritiek','Hoog','Middel','Laag'];const donutTip=Object.assign({},tip(),{callbacks:{title:items=>labelsArr[items[0].dataIndex],label:item=>{const lbl=labelsArr[item.dataIndex];const ids=CUSTOMERS.filter(c=>c.risk.label===lbl).map(c=>c.id);return ids.length?ids:['Geen klanten'];}}});charts['donut']=new Chart(dn,{type:'doughnut',data:{labels:labelsArr,datasets:[{data:[k,hh,m,l],backgroundColor:[hex('var(--crit)'),hex('var(--high)'),hex('var(--med)'),hex('var(--low)')],borderWidth:0,spacing:2}]},options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{animateRotate:true,duration:900},plugins:{legend:{display:false},tooltip:donutTip}}});}
 }
-document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();const s=document.getElementById('gsearch');if(s)s.focus();}if(e.key==='Escape'){closeDetail();closeChurn();}});
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();const s=document.getElementById('gsearch');if(s)s.focus();}if(e.key==='Escape'){closeDetail();closeChurn();closeProfile();closeActionModal();}});
 
 // INIT — toont registratie/login scherm (shell is verborgen tot login)
 switchAuth('login');
