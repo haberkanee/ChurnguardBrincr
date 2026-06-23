@@ -520,7 +520,7 @@ async function loadAllData(){
     if(ac){ac.forEach(r=>{if(!CLIENT_NOTES[r.klantcode])CLIENT_NOTES[r.klantcode]=[];CLIENT_NOTES[r.klantcode].push({type:r.type,label:r.label,icon:r.icon,text:r.tekst,by:r.gebruiker_naam,ts:new Date(r.aangemaakt_op).getTime()});});}
     // ACTIVITEITENLOG
     const {data:lg}=await sb.from('activiteitenlog').select('*').order('aangemaakt_op',{ascending:false}).limit(50);
-    if(lg)AUDIT=lg.map(r=>({act:r.actie,tgt:r.doelwit,i:r.icon||'note',t:relTime(r.aangemaakt_op)}));
+    if(lg)AUDIT=lg.map(r=>({act:r.actie,tgt:r.doelwit,who:r.gebruiker_naam,i:r.icon||'note',t:relTime(r.aangemaakt_op)}));
   }catch(e){console.error('Data laden mislukt:',e);}
 }
 const CSSVAR=(()=>{const s=getComputedStyle(document.documentElement);return v=>s.getPropertyValue(v.replace(/var\(|\)/g,'').trim()).trim();})();
@@ -942,7 +942,7 @@ function startSession(){
 }
 function logAction(act,who){
   const tgt=who||(ME?ME.email.split('@')[0]:'systeem');
-  AUDIT.unshift({act,tgt,t:'zojuist',i:'note'});
+  AUDIT.unshift({act,tgt,who:ME?ME.name:null,t:'zojuist',i:'note'});
   if(sb){try{sb.from('activiteitenlog').insert({actie:act,doelwit:tgt,icon:'note',gebruiker_naam:ME?ME.name:null}).then(()=>{});}catch(e){}}
 }
 
@@ -1083,13 +1083,14 @@ function renderKlanten(){
       ${list.length===0?`<div style="padding:48px;text-align:center;color:var(--ink3)">Geen klanten gevonden.</div>`:''}
       ${list.map(c=>`
         <div class="tbl-r desk" style="grid-template-columns:${GT}">
-          <div class="cid" onclick="openDetail('${c.id}')" style="cursor:pointer;display:flex;align-items:center;gap:6px">${c.id}${noteCount(c.id)?`<span title="${noteCount(c.id)} notitie(s)" style="display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:600;color:var(--green-d);background:var(--green-soft);padding:1px 5px;border-radius:99px"><svg width="9" height="9" viewBox="0 0 16 16" fill="none"><path d="M4 2.5h6L13 5.5v8a1 1 0 01-1 1H4a1 1 0 01-1-1v-10a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>${noteCount(c.id)}</span>`:''}</div><div style="font-size:13px;color:var(--ink2)" onclick="openDetail('${c.id}')">${c.branche}</div><div onclick="openDetail('${c.id}')"><span class="tag">${c.sub}</span></div>
+          <div class="cid" onclick="openDetail('${c.id}')" style="cursor:pointer;display:flex;align-items:center;gap:6px">${c.id}${noteBadgeHtml(c.id)}</div><div style="font-size:13px;color:var(--ink2)" onclick="openDetail('${c.id}')">${c.branche}</div><div onclick="openDetail('${c.id}')"><span class="tag">${c.sub}</span></div>
           <div style="font-family:var(--mono);font-size:13px;color:${c.risk.recent<5?'var(--high)':'var(--ink)'}" onclick="openDetail('${c.id}')">${c.risk.recent}</div>
           <div style="font-family:var(--mono);font-size:13px;color:${c.act>=30?'var(--med)':'var(--ink2)'}" onclick="openDetail('${c.id}')">${c.act}d</div>
           <div onclick="openDetail('${c.id}')">${c.kop?'<span style="color:var(--low);font-weight:700">✓</span>':'<span style="color:var(--crit);font-weight:700">✗</span>'}</div>
           <div style="display:flex;align-items:center;gap:9px" onclick="openDetail('${c.id}')">${H.sbar(c.risk.score,c.risk.color)}<span style="font-family:var(--mono);font-size:13px;font-weight:600;color:${c.risk.color};min-width:22px">${c.risk.score}</span></div>
           <div onclick="openDetail('${c.id}')">${H.badge(c.risk)}</div>
-          <div style="position:relative;display:flex;justify-content:center">
+          <div style="position:relative;display:flex;justify-content:center;gap:4px">
+            <button class="act-btn" onclick="event.stopPropagation();openActionModal('${c.id}','notitie')" title="Notitie toevoegen"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 2.5h6L13 5.5v8a1 1 0 01-1 1H4a1 1 0 01-1-1v-10a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.5 7.5h5M5.5 10h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
             <button class="act-btn" onclick="event.stopPropagation();toggleActionMenu('${c.id}')" title="Actie uitvoeren"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg></button>
           </div>
         </div>
@@ -1120,7 +1121,7 @@ function renderAudit(){
   return `<div class="page">
     <div class="page-head"><h1 class="page-h1">Activiteitenlog</h1><p class="page-desc">Volledige geschiedenis van alle acties binnen het platform — voor transparantie en traceerbaarheid.</p></div>
     <div class="card"><div class="card-body"><div class="stagger">
-    ${AUDIT.map((a,i)=>`<div class="tl-item" style="border-bottom:${i<AUDIT.length-1?'1px solid var(--line)':'none'}"><div class="tl-dot">${IC[a.i]}</div><div style="flex:1;padding-bottom:11px"><div style="font-size:13.5px;line-height:1.45">${a.act} <span style="font-family:var(--mono);font-size:12.5px;color:var(--ink2);background:var(--s2);padding:1px 7px;border-radius:5px">${a.tgt}</span></div><div style="font-size:12px;color:var(--ink3);margin-top:3px">${a.t}</div></div></div>`).join('')}
+    ${AUDIT.map((a,i)=>`<div class="tl-item" style="border-bottom:${i<AUDIT.length-1?'1px solid var(--line)':'none'}"><div class="tl-dot">${IC[a.i]}</div><div style="flex:1;padding-bottom:11px"><div style="font-size:13.5px;line-height:1.45">${a.act} <span style="font-family:var(--mono);font-size:12.5px;color:var(--ink2);background:var(--s2);padding:1px 7px;border-radius:5px">${a.tgt}</span></div><div style="font-size:12px;color:var(--ink3);margin-top:3px">${a.who?`<span style="color:var(--green-d);font-weight:600">${a.who}</span> · `:''}${a.t}</div></div></div>`).join('')}
     </div></div></div>
   </div>`;
 }
@@ -1343,12 +1344,22 @@ function submitAction(id,actionKey){
   // sla op als notitie/actie bij de klant (blijft bewaard in database)
   addNote(id,{type:actionKey,label:a.label,icon:a.li,text,by:ME?ME.name:'Onbekend',ts:Date.now(),when:whenStr,status_waarde:(status&&status.value)||null,gepland_op:(when&&when.value)?new Date(when.value).toISOString():null});
   // log in het activiteitenlogboek (database)
-  AUDIT.unshift({act:a.logText+detail,tgt:id,t:'zojuist',i:a.li});
+  AUDIT.unshift({act:a.logText+detail,tgt:id,who:ME?ME.name:null,t:'zojuist',i:a.li});
   if(sb){try{sb.from('activiteitenlog').insert({actie:a.logText+detail,doelwit:id,icon:a.li,gebruiker_naam:ME?ME.name:null}).then(()=>{});}catch(e){}}
   closeActionModal();
   showToast(a.logText+' voor '+id+' — terug te vinden bij de klant.','success');
-  if(tab==='klanten')document.getElementById('main').innerHTML=renderKlanten();
-  else render();
+  // Werk alleen de notitie-badge van deze klant bij (lijst niet opnieuw sorteren / niet naar boven springen)
+  if(tab==='klanten'){updateNoteBadge(id);}
+  else if(tab==='audit'){document.getElementById('main').innerHTML=renderAudit();}
+}
+// Werkt het notitie-telbadge van één klant bij zonder de hele lijst te hertekenen
+function updateNoteBadge(id){
+  const holder=document.getElementById('notebadge-'+id);
+  if(holder)holder.outerHTML=noteBadgeHtml(id);
+}
+function noteBadgeHtml(id){
+  const n=noteCount(id);
+  return `<span id="notebadge-${id}">${n?`<span title="${n} notitie(s)" style="display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:600;color:var(--green-d);background:var(--green-soft);padding:1px 5px;border-radius:99px"><svg width="9" height="9" viewBox="0 0 16 16" fill="none"><path d="M4 2.5h6L13 5.5v8a1 1 0 01-1 1H4a1 1 0 01-1-1v-10a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>${n}</span>`:''}</span>`;
 }
 
 // CHURN MODAL
@@ -1364,13 +1375,26 @@ function timeAgo(ts){const s=Math.floor((Date.now()-ts)/1000);if(s<60)return 'zo
 function renderNotesList(id){
   const notes=CLIENT_NOTES[id]||[];
   if(!notes.length)return `<div style="font-size:12.5px;color:var(--ink4);padding:10px 0;text-align:center">Nog geen notities of acties voor deze klant.</div>`;
-  return notes.map(n=>`<div style="display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)"><div style="width:30px;height:30px;border-radius:8px;background:var(--green-soft);color:var(--green-d);display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="width:15px;height:15px;display:inline-flex">${MENU_IC[n.icon]||MENU_IC.note}</span></div><div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;color:var(--green-d);margin-bottom:2px">${n.label}</div><div style="font-size:13px;color:var(--ink);line-height:1.45;white-space:pre-wrap">${n.text}</div><div style="font-size:11px;color:var(--ink4);margin-top:4px">${n.by} · ${timeAgo(n.ts)}</div></div></div>`).join('');
+  return notes.map((n,idx)=>`<div style="display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--line)"><div style="width:30px;height:30px;border-radius:8px;background:var(--green-soft);color:var(--green-d);display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="width:15px;height:15px;display:inline-flex">${MENU_IC[n.icon]||MENU_IC.note}</span></div><div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:600;color:var(--green-d);margin-bottom:2px">${n.label}</div><div style="font-size:13px;color:var(--ink);line-height:1.45;white-space:pre-wrap">${n.text}</div><div style="font-size:11px;color:var(--ink4);margin-top:4px">${n.by} · ${timeAgo(n.ts)}</div></div><button onclick="deleteNote('${id}',${idx})" title="Notitie verwijderen" style="flex-shrink:0;width:26px;height:26px;border:none;background:none;cursor:pointer;color:var(--ink4);border-radius:6px;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='var(--crit-soft)';this.style.color='var(--crit)'" onmouseout="this.style.background='none';this.style.color='var(--ink4)'"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4.5h10M6.5 4.5V3.5a1 1 0 011-1h1a1 1 0 011 1v1M5 4.5l.5 8a1 1 0 001 1h3a1 1 0 001-1l.5-8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>`).join('');
+}
+async function deleteNote(id,idx){
+  const notes=CLIENT_NOTES[id];if(!notes||!notes[idx])return;
+  const removed=notes[idx];
+  notes.splice(idx,1);
+  if(!notes.length)delete CLIENT_NOTES[id];
+  // verwijder uit de database (op basis van klantcode + tekst + tijd)
+  if(sb){try{
+    await sb.from('acties').delete().eq('klantcode',id).eq('tekst',removed.text);
+  }catch(e){console.error('Notitie verwijderen mislukt:',e);}}
+  const list=document.getElementById('notes-list-'+id);if(list)list.innerHTML=renderNotesList(id);
+  updateNoteBadge(id);
+  showToast('Notitie verwijderd.','success');
 }
 function quickNote(id){
   const el=document.getElementById('quick-note-'+id);if(!el)return;
   const text=el.value.trim();if(!text){showToast('Typ eerst een notitie.','error');return;}
   addNote(id,{type:'notitie',label:'Notitie',icon:'note',text,by:ME?ME.name:'Onbekend',ts:Date.now()});
-  AUDIT.unshift({act:'Notitie toegevoegd',tgt:id,t:'zojuist',i:'note'});
+  AUDIT.unshift({act:'Notitie toegevoegd',tgt:id,who:ME?ME.name:null,t:'zojuist',i:'note'});
   if(sb){try{sb.from('activiteitenlog').insert({actie:'Notitie toegevoegd',doelwit:id,icon:'note',gebruiker_naam:ME?ME.name:null}).then(()=>{});}catch(e){}}
   el.value='';
   const list=document.getElementById('notes-list-'+id);if(list)list.innerHTML=renderNotesList(id);
