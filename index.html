@@ -430,6 +430,7 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
 <div id="dist-pop" style="display:none;position:fixed;z-index:350;background:var(--surface);border:1px solid var(--line);border-radius:11px;box-shadow:var(--sh-lg);padding:10px 12px;max-width:240px;pointer-events:none"></div>
 <div class="ov" id="action-ov" onclick="closeActionModal(event)"><div class="sheet sheet-sm" id="action-sheet"></div></div>
 <div class="ov" id="profile-ov" onclick="closeProfile(event)"><div class="sheet sheet-sm" id="profile-sheet"></div></div>
+<div class="ov" id="churnpick-ov" onclick="closeChurnPicker(event)"><div class="sheet sheet-sm" id="churnpick-sheet"></div></div>
 <script>
 // DATA
 const RAW=[
@@ -479,7 +480,7 @@ function rebuildCustomers(rawArr){
 }
 const CHURN_HIST=[{m:"Jul",c:4,r:9},{m:"Aug",c:3,r:8},{m:"Sep",c:2,r:7},{m:"Okt",c:5,r:13},{m:"Nov",c:2,r:7},{m:"Dec",c:3,r:9},{m:"Jan",c:3,r:8},{m:"Feb",c:2,r:7},{m:"Mrt",c:4,r:10},{m:"Apr",c:2,r:9},{m:"Mei",c:5,r:12},{m:"Jun",c:3,r:11}];
 const HEALTH_HIST=[72,71,73,69,68,70,71,67,66,68,64,63];
-const CHURNED=[{id:"K-0011",branche:"Retail",reden:"Geen koppeling + langdurig inactief",mrr:340},{id:"K-0028",branche:"Logistiek",reden:"Orders >60% gedaald over 3 maanden",mrr:520},{id:"K-0039",branche:"Zorg",reden:"Abonnement gedowngraded, daarna opgezegd",mrr:180}];
+let CHURNED=[{id:"K-0011",branche:"Retail",reden:"Geen koppeling + langdurig inactief",mrr:340},{id:"K-0028",branche:"Logistiek",reden:"Orders >60% gedaald over 3 maanden",mrr:520},{id:"K-0039",branche:"Zorg",reden:"Abonnement gedowngraded, daarna opgezegd",mrr:180}];
 // Activiteitenlog en notities komen uit de Supabase-database.
 let AUDIT=[];                 // [{act,tgt,t,i}]
 let CLIENT_NOTES={};          // { "K-0042":[{type,label,icon,text,by,ts}] }
@@ -1086,8 +1087,8 @@ function renderDash(){
       <div class="card"><div class="card-head"><div><div class="card-title">Recente activiteit</div><div class="card-sub">Team-acties</div></div><button class="btn btn-gh" style="padding:5px 11px;font-size:11.5px" onclick="go('audit')">Alles</button></div><div class="card-body" style="padding-top:8px;padding-bottom:8px">${AUDIT.slice(0,4).map(a=>`<div class="tl-item" style="padding:8px 0"><div class="tl-dot" style="width:28px;height:28px">${IC[a.i]}</div><div style="flex:1;min-width:0"><div style="font-size:12.5px;line-height:1.4">${a.act}</div><div style="font-size:11px;color:var(--ink3);margin-top:1px"><span style="font-family:var(--mono)">${a.tgt}</span> · ${a.t}</div></div></div>`).join('')}</div></div>
     </div>
     <div class="card">
-      <div class="card-head"><div><div class="card-title">Gechurnd deze maand</div><div class="card-sub">${CHURNED.length} klanten · ${H.eur(CHURNED.reduce((s,c)=>s+c.mrr,0))} MRR verloren</div></div><button class="btn btn-gh" style="padding:6px 12px;font-size:12px" onclick="showChurn()">Details</button></div>
-      ${CHURNED.map(c=>`<div class="lrow" style="cursor:default"><span class="cid">${c.id}</span><span class="tag">${c.branche}</span><span class="cmeta" style="flex:1">${c.reden}</span><span style="font-family:var(--mono);font-size:12px;color:var(--crit);font-weight:600">−${H.eur(c.mrr)}</span></div>`).join('')}
+      <div class="card-head"><div><div class="card-title">Gechurnd deze maand</div><div class="card-sub">${CHURNED.length} klanten · ${H.eur(CHURNED.reduce((s,c)=>s+c.mrr,0))} MRR verloren</div></div><div style="display:flex;align-items:center;gap:6px"><button class="btn btn-gh" style="padding:6px 12px;font-size:12px" onclick="showChurn()">Details</button><button class="act-btn" title="Klant als gechurnd markeren" onclick="openChurnPicker()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg></button></div></div>
+      ${CHURNED.map(c=>`<div class="lrow" style="cursor:default"><span class="cid">${c.id}</span><span class="tag">${c.branche}</span><span class="cmeta" style="flex:1">${c.reden}</span><span style="font-family:var(--mono);font-size:12px;color:var(--crit);font-weight:600">−${H.eur(c.mrr)}</span><button class="act-btn" title="Verwijder uit gechurnd" onclick="unchurn('${c.id}')" style="margin-left:8px"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>`).join('')}
     </div>
   </div>`;
 }
@@ -1248,6 +1249,10 @@ function pCSV(f){
           bedrag:bedragHist
         };
       });
+      // Klanten die langer dan 100 dagen inactief zijn worden niet geïmporteerd
+      const voorFilter=impParsed.length;
+      impParsed=impParsed.filter(c=>c.act<=100);
+      const verwijderd=voorFilter-impParsed.length;
       impErr='';impOK=true;
       // LAAD de data in het dashboard
       rebuildCustomers(impParsed);
@@ -1271,7 +1276,7 @@ function pCSV(f){
         })();
       }
       logAction('Klantdata geïmporteerd ('+impParsed.length+' klanten)','CSV');
-      showToast(impParsed.length+' klanten geïmporteerd.','success');
+      showToast(impParsed.length+' klanten geïmporteerd'+(verwijderd?` (${verwijderd} overgeslagen: >100 dagen inactief)`:'')+'.','success');
       render();
     }catch(err){
       console.error('Import fout:',err);
@@ -1419,6 +1424,80 @@ function showChurn(){
   document.getElementById('churn-ov').classList.add('open');
 }
 function closeChurn(e){if(e&&e.target!==document.getElementById('churn-ov'))return;document.getElementById('churn-ov').classList.remove('open');}
+
+// ══════ GECHURNDE KLANTEN BEHEREN (zoeken + selecteren) ══════
+let churnPickSearch='';
+function openChurnPicker(){
+  churnPickSearch='';
+  renderChurnPicker();
+  document.getElementById('churnpick-ov').classList.add('open');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{const i=document.getElementById('churnpick-search');if(i)i.focus();},50);
+}
+function closeChurnPicker(e){if(e&&e.target!==document.getElementById('churnpick-ov'))return;document.getElementById('churnpick-ov').classList.remove('open');document.body.style.overflow='';}
+function renderChurnPicker(){
+  const q=churnPickSearch.trim().toLowerCase();
+  const churnedIds=new Set(CHURNED.map(c=>c.id));
+  // alleen actieve klanten die nog niet gechurnd zijn, gefilterd op zoekterm
+  let matches=CUSTOMERS.filter(c=>!churnedIds.has(c.id));
+  if(q)matches=matches.filter(c=>c.id.toLowerCase().includes(q)||c.branche.toLowerCase().includes(q));
+  matches=matches.slice(0,40);
+  const rows=matches.length?matches.map(c=>`
+    <div onclick="markChurned('${c.id}')" style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:9px;cursor:pointer;border:1px solid var(--line);margin-bottom:7px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='none'">
+      <span class="cid">${c.id}</span><span class="tag">${c.branche}</span>
+      <span style="font-size:12px;color:var(--ink3)">${c.act}d inactief · score ${c.risk.score}</span>
+      <span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--green-d)">+ markeer</span>
+    </div>`).join(''):`<div style="padding:24px;text-align:center;font-size:13px;color:var(--ink4)">${q?'Geen klanten gevonden voor "'+churnPickSearch+'".':'Begin met typen om een klantcode te zoeken.'}</div>`;
+  document.getElementById('churnpick-sheet').innerHTML=`
+    <div class="card-head" style="border-radius:var(--rx) var(--rx) 0 0;position:sticky;top:0;background:var(--surface);z-index:5">
+      <div><div class="card-sub" style="margin-bottom:2px">Markeer als gechurnd</div><div class="card-title" style="font-size:16px">Klant selecteren</div></div>
+      <button class="tb-btn" onclick="closeChurnPicker()" style="box-shadow:none">✕</button>
+    </div>
+    <div style="padding:16px 21px 21px">
+      <div style="position:relative;margin-bottom:14px">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="position:absolute;left:13px;top:50%;transform:translateY(-50%)"><circle cx="7" cy="7" r="4.5" stroke="var(--ink4)" stroke-width="1.6"/><path d="M11 11l3 3" stroke="var(--ink4)" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input type="text" id="churnpick-search" value="${churnPickSearch.replace(/"/g,'&quot;')}" oninput="churnPickSearch=this.value;renderChurnPickerList()" placeholder="Zoek op klantcode of branche…" class="auth-in" style="padding-left:38px"/>
+      </div>
+      <div id="churnpick-list" style="max-height:50vh;overflow-y:auto">${rows}</div>
+    </div>`;
+}
+// alleen de lijst herrenderen (zodat focus in het zoekveld behouden blijft)
+function renderChurnPickerList(){
+  const q=churnPickSearch.trim().toLowerCase();
+  const churnedIds=new Set(CHURNED.map(c=>c.id));
+  let matches=CUSTOMERS.filter(c=>!churnedIds.has(c.id));
+  if(q)matches=matches.filter(c=>c.id.toLowerCase().includes(q)||c.branche.toLowerCase().includes(q));
+  matches=matches.slice(0,40);
+  const rows=matches.length?matches.map(c=>`
+    <div onclick="markChurned('${c.id}')" style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:9px;cursor:pointer;border:1px solid var(--line);margin-bottom:7px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='none'">
+      <span class="cid">${c.id}</span><span class="tag">${c.branche}</span>
+      <span style="font-size:12px;color:var(--ink3)">${c.act}d inactief · score ${c.risk.score}</span>
+      <span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--green-d)">+ markeer</span>
+    </div>`).join(''):`<div style="padding:24px;text-align:center;font-size:13px;color:var(--ink4)">${q?'Geen klanten gevonden voor "'+churnPickSearch+'".':'Begin met typen om een klantcode te zoeken.'}</div>`;
+  const list=document.getElementById('churnpick-list');if(list)list.innerHTML=rows;
+}
+async function markChurned(id){
+  const c=CUSTOMERS.find(x=>x.id===id);if(!c)return;
+  // voeg toe aan gechurnd
+  CHURNED.unshift({id:c.id,branche:c.branche,reden:c.risk.flags&&c.risk.flags.length?c.risk.flags[0]:'Handmatig gemarkeerd als gechurnd',mrr:Math.round(c.bedrag[c.bedrag.length-1])});
+  // haal uit actieve klanten
+  CUSTOMERS=CUSTOMERS.filter(x=>x.id!==id);
+  URGENT=URGENT.filter(x=>x.id!==id);
+  // werk de database bij: status op 'gechurnd'
+  if(sb){try{await sb.from('klanten').update({status:'gechurnd'}).eq('klantcode',id);}catch(e){console.error('Churn-status opslaan:',e);}}
+  logAction('Klant gemarkeerd als gechurnd',id);
+  rebuildCustomers(CUSTOMERS); // herbereken urgentie/badges
+  renderChurnPicker();
+  render();
+  showToast(id+' gemarkeerd als gechurnd.','success');
+}
+async function unchurn(id){
+  CHURNED=CHURNED.filter(c=>c.id!==id);
+  if(sb){try{await sb.from('klanten').update({status:'actief'}).eq('klantcode',id);}catch(e){}}
+  logAction('Klant teruggezet naar actief',id);
+  render();
+  showToast(id+' teruggezet naar actief.','success');
+}
 
 // DETAIL MODAL
 const aiCache={};
