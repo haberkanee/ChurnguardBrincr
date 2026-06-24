@@ -13,6 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
   // EmailJS configuratie — verstuurt echte verificatiemails
   (function(){try{emailjs.init({publicKey:"V8luPLCWqM5oZPhFq"});}catch(e){console.warn("EmailJS init nog niet beschikbaar");}})();
@@ -580,7 +581,7 @@ function mapUser(row){
     role:row.rol, functie:row.functie||row.rol||'Medewerker', geverifieerd:row.geverifieerd,
     av:initials(row.naam), color:AVATAR_COLORS[(row.gebruiker_id||0)%AVATAR_COLORS.length],
     // Voorlopig krijgt iedereen dezelfde (volledige) rechten
-    perms:["dashboard","klanten","alerts","audit","import"]
+    perms:["dashboard","klanten","alerts","audit","import","export"]
   };
 }
 const AVATAR_COLORS=["#247a59","#2f9e74","#5cb89a","#1f7a4d","#3d9b7a"];
@@ -987,6 +988,7 @@ const ALLTABS=[
   {k:'alerts',l:'Alerts',grp:'Monitoring',icon:'<svg class="ni" viewBox="0 0 20 20" fill="none"><path d="M10 2.5c-2.8 0-5 2.2-5 5 0 4-1.5 5.5-1.5 5.5h13S15 11.5 15 7.5c0-2.8-2.2-5-5-5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 16a2 2 0 004 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'},
   {k:'audit',l:'Activiteitenlog',grp:'Monitoring',icon:'<svg class="ni" viewBox="0 0 20 20" fill="none"><path d="M4 3.5h9l3 3v10a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-13z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 9h6M7 12h6M7 15h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'},
   {k:'import',l:'Data-import',grp:'Beheer',icon:'<svg class="ni" viewBox="0 0 20 20" fill="none"><path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13v2.5A1.5 1.5 0 004.5 17h11a1.5 1.5 0 001.5-1.5V13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'},
+  {k:'export',l:'Data-export',grp:'Beheer',icon:'<svg class="ni" viewBox="0 0 20 20" fill="none"><path d="M10 3v10m0 0l-3.5-3.5M10 13l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13v2.5A1.5 1.5 0 004.5 17h11a1.5 1.5 0 001.5-1.5V13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'},
 ];
 const LOCKIC='<svg class="ni" viewBox="0 0 16 16" fill="none" style="opacity:0.55"><rect x="3.5" y="7" width="9" height="6.5" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.4"/></svg>';
 function buildNav(){
@@ -1020,10 +1022,10 @@ function showToast(msg,type){
 
 // ROUTING
 let tab='dashboard';
-const META={dashboard:{c:'Werkruimte',t:'Dashboard'},klanten:{c:'Werkruimte',t:'Klanten'},alerts:{c:'Monitoring',t:'Alerts'},audit:{c:'Monitoring',t:'Activiteitenlog'},import:{c:'Beheer',t:'Data-import'}};
+const META={dashboard:{c:'Werkruimte',t:'Dashboard'},klanten:{c:'Werkruimte',t:'Klanten'},alerts:{c:'Monitoring',t:'Alerts'},audit:{c:'Monitoring',t:'Activiteitenlog'},import:{c:'Beheer',t:'Data-import'},export:{c:'Beheer',t:'Data-export'}};
 function go(t){if(ME&&!ME.perms.includes(t)){denyAccess(META[t].t);return;}tab=t;document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));document.getElementById('tb-title').textContent=META[t].t;document.getElementById('main').scrollTop=0;render();}
 function gSearch(v){if(tab!=='klanten')go('klanten');kf.search=v;if(tab==='klanten'){document.getElementById('main').innerHTML=renderKlanten();requestAnimationFrame(drawCharts);}}
-function render(){const m=document.getElementById('main');({dashboard:()=>m.innerHTML=renderDash(),klanten:()=>m.innerHTML=renderKlanten(),alerts:()=>m.innerHTML=renderAlerts(),audit:()=>m.innerHTML=renderAudit(),import:()=>m.innerHTML=renderImport()})[tab]();requestAnimationFrame(drawCharts);}
+function render(){const m=document.getElementById('main');({dashboard:()=>m.innerHTML=renderDash(),klanten:()=>m.innerHTML=renderKlanten(),alerts:()=>m.innerHTML=renderAlerts(),audit:()=>m.innerHTML=renderAudit(),import:()=>m.innerHTML=renderImport(),export:()=>m.innerHTML=renderExport()})[tab]();requestAnimationFrame(drawCharts);}
 
 // DASHBOARD
 function renderDash(){
@@ -1181,6 +1183,102 @@ function daysSince(dateStr){
   return diff>0?diff:0;
 }
 let impRows=[],impErr='',impOK=false,impParsed=[];
+
+// ════════════════ DATA-EXPORT ════════════════
+function renderExport(){
+  const totaal=CUSTOMERS.length, kritiek=CUSTOMERS.filter(c=>c.risk.label==='Kritiek').length, hoog=CUSTOMERS.filter(c=>c.risk.label==='Hoog').length;
+  const card=(titel,oms,rows,fnCsv,fnXlsx,ic)=>`
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body">
+        <div style="display:flex;align-items:flex-start;gap:14px">
+          <div style="width:42px;height:42px;border-radius:11px;background:var(--green-soft);color:var(--green-d);display:flex;align-items:center;justify-content:center;flex-shrink:0">${ic}</div>
+          <div style="flex:1;min-width:0">
+            <div class="card-title" style="font-size:15px">${titel}</div>
+            <div class="card-sub" style="margin-top:2px">${oms}</div>
+            <div style="font-size:12px;color:var(--ink4);margin-top:6px">${rows} ${rows===1?'rij':'rijen'} beschikbaar</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            <button class="btn btn-gh" style="padding:8px 13px;font-size:12.5px" onclick="${fnCsv}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right:5px"><path d="M8 2v8m0 0L5 7m3 3l3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 11v2A1.5 1.5 0 004 14.5h8a1.5 1.5 0 001.5-1.5v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>CSV</button>
+            <button class="btn btn-pri" style="padding:8px 13px;font-size:12.5px" onclick="${fnXlsx}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right:5px"><path d="M8 2v8m0 0L5 7m3 3l3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 11v2A1.5 1.5 0 004 14.5h8a1.5 1.5 0 001.5-1.5v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Excel</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  return `<div class="page">
+    <div class="page-head"><h1 class="page-h1">Data-export</h1><p class="page-desc">Exporteer klantgegevens en rapportages naar CSV of Excel voor verdere analyse of rapportage.</p></div>
+
+    <div class="sec" style="margin:8px 0 12px">Klantgegevens</div>
+    ${card('Alle klanten','Volledige klantenlijst met branche, abonnement, orders, inactiviteit, risicoscore en status.',totaal,"exportKlanten('csv')","exportKlanten('xlsx')",'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="7" cy="6" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M2 17c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M13 4.5a3 3 0 010 5.8M14 12.2c2 .5 3.5 2.3 3.5 4.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>')}
+    ${card('Risicoklanten (Kritiek + Hoog)','Alleen klanten die directe aandacht vereisen, gesorteerd op risicoscore.',kritiek+hoog,"exportRisico('csv')","exportRisico('xlsx')",'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2.5c-2.8 0-5 2.2-5 5 0 4-1.5 5.5-1.5 5.5h13S15 11.5 15 7.5c0-2.8-2.2-5-5-5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 16a2 2 0 004 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>')}
+    ${card('Gechurnde klanten','Opgezegde klanten met reden en verloren maandomzet (MRR).',CHURNED.length,"exportGechurnd('csv')","exportGechurnd('xlsx')",'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.6"/><path d="M7 7l6 6M13 7l-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>')}
+
+    <div class="sec" style="margin:20px 0 12px">Rapportages</div>
+    ${card('Risicoverdeling (samenvatting)','Aantal klanten per risiconiveau (Kritiek, Hoog, Middel, Laag) met percentages.',4,"exportRapport('csv')","exportRapport('xlsx')",'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 17V8M8 17V4M13 17v-6M18 17V9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>')}
+    ${card('Branche-overzicht','Aantal klanten en gemiddelde risicoscore per branche.',new Set(CUSTOMERS.map(c=>c.branche)).size,"exportBranche('csv')","exportBranche('xlsx')",'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="11" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="11" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.6"/></svg>')}
+
+    <div class="card" style="background:var(--s2);border-style:dashed">
+      <div class="card-body" style="display:flex;gap:11px;align-items:flex-start">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;margin-top:1px;color:var(--ink3)"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/><path d="M8 7.5v3.5M8 5h.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <div style="font-size:12.5px;color:var(--ink3);line-height:1.5">CSV opent in elk programma (Excel, Google Sheets, Numbers). Excel (.xlsx) behoudt opmaak en kolomtypes. De bestanden bevatten de gegevens zoals nu in het dashboard geladen.</div>
+      </div>
+    </div>
+  </div>`;
+}
+// Download-helper voor CSV
+function downloadCSV(rows,filename){
+  if(!rows.length){showToast('Geen gegevens om te exporteren.','error');return;}
+  const headers=Object.keys(rows[0]);
+  const esc=v=>{const s=String(v==null?'':v);return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  const csv=[headers.join(';'),...rows.map(r=>headers.map(h=>esc(r[h])).join(';'))].join('\r\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);
+  showToast(filename+' gedownload.','success');
+  logAction('Data geëxporteerd (CSV)',filename);
+}
+// Download-helper voor Excel (.xlsx) via SheetJS
+function downloadXLSX(rows,filename,sheetName){
+  if(!rows.length){showToast('Geen gegevens om te exporteren.','error');return;}
+  if(typeof XLSX==='undefined'){showToast('Excel-bibliotheek nog niet geladen, probeer opnieuw.','error');return;}
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,sheetName||'Export');
+  XLSX.writeFile(wb,filename);
+  showToast(filename+' gedownload.','success');
+  logAction('Data geëxporteerd (Excel)',filename);
+}
+function datum(){return new Date().toISOString().slice(0,10);}
+// Bouwt de klantrijen op voor export
+function klantRows(list){
+  return list.map(c=>({
+    Klantcode:c.id, Branche:c.branche, Abonnement:c.sub,
+    'Aantal orders':c.orders[c.orders.length-1],
+    'Dagen inactief':c.act,
+    Boekhoudkoppeling:c.kop?'Ja':'Nee',
+    Partner:c.partner?'Ja':'Nee',
+    'Maandomzet (EUR)':Math.round(c.bedrag[c.bedrag.length-1]),
+    Risicoscore:c.risk.score, Risiconiveau:c.risk.label
+  }));
+}
+function exportKlanten(fmt){const rows=klantRows(CUSTOMERS);fmt==='csv'?downloadCSV(rows,`klanten_${datum()}.csv`):downloadXLSX(rows,`klanten_${datum()}.xlsx`,'Klanten');}
+function exportRisico(fmt){const rows=klantRows(CUSTOMERS.filter(c=>['Kritiek','Hoog'].includes(c.risk.label)));fmt==='csv'?downloadCSV(rows,`risicoklanten_${datum()}.csv`):downloadXLSX(rows,`risicoklanten_${datum()}.xlsx`,'Risicoklanten');}
+function exportGechurnd(fmt){
+  const rows=CHURNED.map(c=>({Klantcode:c.id,Branche:c.branche,Reden:c.reden,'Verloren MRR (EUR)':c.mrr}));
+  fmt==='csv'?downloadCSV(rows,`gechurnd_${datum()}.csv`):downloadXLSX(rows,`gechurnd_${datum()}.xlsx`,'Gechurnd');
+}
+function exportRapport(fmt){
+  const tot=CUSTOMERS.length||1;
+  const tel=lvl=>CUSTOMERS.filter(c=>c.risk.label===lvl).length;
+  const rows=['Kritiek','Hoog','Middel','Laag'].map(lvl=>({Risiconiveau:lvl,'Aantal klanten':tel(lvl),Percentage:Math.round(tel(lvl)/tot*100)+'%'}));
+  rows.push({Risiconiveau:'Totaal','Aantal klanten':CUSTOMERS.length,Percentage:'100%'});
+  fmt==='csv'?downloadCSV(rows,`risicoverdeling_${datum()}.csv`):downloadXLSX(rows,`risicoverdeling_${datum()}.xlsx`,'Risicoverdeling');
+}
+function exportBranche(fmt){
+  const map={};
+  CUSTOMERS.forEach(c=>{if(!map[c.branche])map[c.branche]={n:0,score:0};map[c.branche].n++;map[c.branche].score+=c.risk.score;});
+  const rows=Object.entries(map).map(([b,v])=>({Branche:b,'Aantal klanten':v.n,'Gem. risicoscore':Math.round(v.score/v.n)})).sort((a,b)=>b['Aantal klanten']-a['Aantal klanten']);
+  fmt==='csv'?downloadCSV(rows,`branche_overzicht_${datum()}.csv`):downloadXLSX(rows,`branche_overzicht_${datum()}.xlsx`,'Branches');
+}
+
 function renderImport(){
   return `<div class="page">
     <div class="page-head"><h1 class="page-h1">Data-import</h1><p class="page-desc">Importeer geanonimiseerde klantdata via een CSV-export uit Brincr. De kolommen worden automatisch herkend en omgezet.</p></div>
