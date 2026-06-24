@@ -1023,9 +1023,9 @@ function showToast(msg,type){
 // ROUTING
 let tab='dashboard';
 const META={dashboard:{c:'Werkruimte',t:'Dashboard'},klanten:{c:'Werkruimte',t:'Klanten'},alerts:{c:'Monitoring',t:'Alerts'},audit:{c:'Monitoring',t:'Activiteitenlog'},import:{c:'Beheer',t:'Data-import'},export:{c:'Beheer',t:'Data-export'}};
-function go(t){if(ME&&!ME.perms.includes(t)){denyAccess(META[t].t);return;}tab=t;document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));document.getElementById('tb-title').textContent=META[t].t;document.getElementById('main').scrollTop=0;render();}
+function go(t){if(ME&&!ME.perms.includes(t)){denyAccess(META[t].t);return;}hideDistPop();tab=t;document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));document.getElementById('tb-title').textContent=META[t].t;document.getElementById('main').scrollTop=0;render();}
 function gSearch(v){if(tab!=='klanten')go('klanten');kf.search=v;if(tab==='klanten'){document.getElementById('main').innerHTML=renderKlanten();requestAnimationFrame(drawCharts);}}
-function render(){const m=document.getElementById('main');({dashboard:()=>m.innerHTML=renderDash(),klanten:()=>m.innerHTML=renderKlanten(),alerts:()=>m.innerHTML=renderAlerts(),audit:()=>m.innerHTML=renderAudit(),import:()=>m.innerHTML=renderImport(),export:()=>m.innerHTML=renderExport()})[tab]();requestAnimationFrame(drawCharts);}
+function render(){hideDistPop();const m=document.getElementById('main');({dashboard:()=>m.innerHTML=renderDash(),klanten:()=>m.innerHTML=renderKlanten(),alerts:()=>m.innerHTML=renderAlerts(),audit:()=>m.innerHTML=renderAudit(),import:()=>m.innerHTML=renderImport(),export:()=>m.innerHTML=renderExport()})[tab]();requestAnimationFrame(drawCharts);}
 
 // DASHBOARD
 function renderDash(){
