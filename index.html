@@ -1163,7 +1163,7 @@ function renderAudit(){
 const COLS=[
   {k:"relation_ID",d:"Klantcode / relatienummer",app:"Klantcode"},
   {k:"company_branche",d:"Branche van de klant",app:"Branche"},
-  {k:"price_plan",d:"Abonnement / prijsplan",app:"Subscriptie"},
+  {k:"price",d:"Maandbedrag / prijs (EUR)",app:"Maandomzet"},
   {k:"order_count",d:"Aantal orders",app:"Aantal orders"},
   {k:"last_login",d:"Laatste login (datum)",app:"Activiteit"},
   {k:"bookkeeping_program",d:"Boekhoudkoppeling (yes/no)",app:"Boekhoudkoppeling"},
@@ -1300,6 +1300,8 @@ function hDrop(e){e.preventDefault();document.getElementById('dz')?.classList.re
 function hFile(e){if(!ME.perms.includes('import')){showToast('Actie geweigerd: alleen de Teamlead mag data importeren.','error');return;}pCSV(e.target.files[0]);}
 // Plan → indicatief maandbedrag (voor MRR-berekening), op basis van het prijsplan
 function planBedrag(plan){const p=cleanPlan(plan).toLowerCase();if(p.includes('x-large')||p.includes('global'))return 2200;if(p.includes('large')||p.includes('enterprise'))return 1500;if(p.includes('business')||p.includes('medium'))return 850;if(p.includes('small')||p.includes('startup'))return 350;return 600;}
+// Bepaalt een leesbaar abonnementslabel op basis van het echte maandbedrag
+function bedragNaarPlan(b){if(b>=1500)return'Enterprise';if(b>=800)return'Business';if(b>=400)return'Pro';if(b>=150)return'Starter';return'Basic';}
 function pCSV(f){
   if(!f)return;
   if(!ME.perms.includes('import')){showToast('Actie geweigerd: onvoldoende rechten.','error');return;}
@@ -1314,11 +1316,13 @@ function pCSV(f){
       // detecteer scheidingsteken (; of ,)
       const sep=lines[0].split(';').length>=lines[0].split(',').length?';':',';
       const hd=lines[0].split(sep).map(x=>x.trim());
-      // controleer verplichte kolommen
-      const required=COLS.map(c=>c.k);
+      // controleer verplichte kolommen — 'price' of (oud) 'price_plan' is toegestaan
+      const required=COLS.map(c=>c.k).filter(k=>k!=='price');
       const miss=required.filter(k=>!hd.includes(k));
+      const hasPrice=hd.includes('price'), hasPlan=hd.includes('price_plan');
+      if(!hasPrice&&!hasPlan)miss.push('price');
       if(miss.length){
-        impErr='Ontbrekende kolommen: '+miss.join(', ')+'. Verwacht een Brincr-export met: '+required.join(', ');
+        impErr='Ontbrekende kolommen: '+miss.join(', ')+'. Verwacht een Brincr-export met: '+required.concat(['price']).join(', ');
         impRows=[];impParsed=[];impOK=false;showToast('Import mislukt: kolommen herkend niet.','error');render();return;
       }
       // ruwe rijen (voor evt. preview)
@@ -1328,17 +1332,21 @@ function pCSV(f){
       impParsed=impRows.map(row=>{
         const orderCount=parseInt(row.order_count,10)||0;
         const act=daysSince(row.last_login);
-        const bedrag=planBedrag(row.price_plan);
+        // ECHT maandbedrag uit de 'price'-kolom; valt terug op schatting per plan als alleen price_plan bestaat
+        const bedrag=hasPrice?(parseFloat(String(row.price).replace(',','.'))||0):planBedrag(row.price_plan);
+        // afgeleid abonnementslabel op basis van het bedrag (alleen ter weergave)
+        const subLabel=hasPrice?bedragNaarPlan(bedrag):cleanPlan(row.price_plan);
         // synthetische 6-maands historie rond de huidige waarde (voor trendgrafieken)
         const trend=(base,vary)=>{const arr=[];for(let i=5;i>=0;i--){const factor=1+(i*vary);arr.push(Math.max(0,Math.round(base*factor)));}return arr;};
         // als orders 0 zijn maar lang inactief: aflopende trend; anders licht stabiel
         const orderHist=orderCount===0?trend(Math.max(orderCount,act>120?3:0),0.15):trend(orderCount,0.04);
         orderHist[orderHist.length-1]=orderCount; // laatste = echte waarde
-        const bedragHist=trend(bedrag,0.02);
+        // bedrag-historie licht variërend rond het echte bedrag, laatste = echte waarde
+        const bedragHist=trend(bedrag,0.02);bedragHist[bedragHist.length-1]=Math.round(bedrag*100)/100;
         return {
           id:'K-'+String(row.relation_ID).padStart(4,'0'),
           branche:BRANCHE_MAP[row.company_branche]||row.company_branche||'Overig',
-          sub:cleanPlan(row.price_plan),
+          sub:subLabel,
           orders:orderHist,
           act:act,
           kop:yesNo(row.bookkeeping_program),
