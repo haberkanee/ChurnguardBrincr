@@ -433,6 +433,7 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
 <div class="ov" id="profile-ov" onclick="closeProfile(event)"><div class="sheet sheet-sm" id="profile-sheet"></div></div>
 <div class="ov" id="churnpick-ov" onclick="closeChurnPicker(event)"><div class="sheet sheet-sm" id="churnpick-sheet"></div></div>
 <div class="ov" id="mrr-ov" onclick="closeMrrList(event)"><div class="sheet" id="mrr-sheet"></div></div>
+<div class="ov" id="trend-ov" onclick="closeTrendEditor(event)"><div class="sheet sheet-sm" id="trend-sheet"></div></div>
 <script>
 // DATA
 const RAW=[
@@ -537,7 +538,7 @@ function rebuildCustomers(rawArr){
   // update alert-badges
   ['sb-badge','mb-badge'].forEach(id=>{const e=document.getElementById(id);if(e){e.textContent=URGENT.length;e.style.display=URGENT.length?'':'none';}});
 }
-const CHURN_HIST=[{m:"Jul",c:4,r:9},{m:"Aug",c:3,r:8},{m:"Sep",c:2,r:7},{m:"Okt",c:5,r:13},{m:"Nov",c:2,r:7},{m:"Dec",c:3,r:9},{m:"Jan",c:3,r:8},{m:"Feb",c:2,r:7},{m:"Mrt",c:4,r:10},{m:"Apr",c:2,r:9},{m:"Mei",c:5,r:12},{m:"Jun",c:3,r:11}];
+let CHURN_HIST=[{m:"Jul",c:4,r:9},{m:"Aug",c:3,r:8},{m:"Sep",c:2,r:7},{m:"Okt",c:5,r:13},{m:"Nov",c:2,r:7},{m:"Dec",c:3,r:9},{m:"Jan",c:3,r:8},{m:"Feb",c:2,r:7},{m:"Mrt",c:4,r:10},{m:"Apr",c:2,r:9},{m:"Mei",c:5,r:12},{m:"Jun",c:3,r:11}];
 const HEALTH_HIST=[72,71,73,69,68,70,71,67,66,68,64,63];
 // Berekent de gemiddelde gezondheidsscore van de portefeuille (0-100).
 // Veel kritieke/hoge klanten → lage score; weinig → hoge score.
@@ -1202,8 +1203,8 @@ function renderDash(){
       ${stat(IC.users,'var(--green-soft)','var(--green-d)','Actieve klanten',CUSTOMERS.length,'Totaal in portfolio','',GO('klanten'))}
     </div>
     <div class="g3" style="margin-bottom:16px">
-      <div class="card"><div class="card-head"><div><div class="card-title">Churn trend</div><div class="card-sub">${CHURN_HIST.reduce((a,b)=>a+b.c,0)} klanten · 12 mnd</div></div></div><div class="card-body"><div class="chart-b"><canvas id="churn-chart"></canvas></div></div></div>
-      <div class="card"><div class="card-head"><div><div class="card-title">Risicoklanten / maand</div><div class="card-sub">Hoog + kritiek niveau</div></div></div><div class="card-body"><div class="chart-b"><canvas id="risk-chart"></canvas></div></div></div>
+      <div class="card"><div class="card-head"><div><div class="card-title">Churn trend</div><div class="card-sub">${CHURN_HIST.reduce((a,b)=>a+b.c,0)} klanten · 12 mnd</div></div><button class="act-btn" title="Cijfers aanpassen" onclick="openTrendEditor('churn')"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg></button></div><div class="card-body"><div class="chart-b"><canvas id="churn-chart"></canvas></div></div></div>
+      <div class="card"><div class="card-head"><div><div class="card-title">Risicoklanten / maand</div><div class="card-sub">Hoog + kritiek niveau</div></div><button class="act-btn" title="Cijfers aanpassen" onclick="openTrendEditor('risk')"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg></button></div><div class="card-body"><div class="chart-b"><canvas id="risk-chart"></canvas></div></div></div>
       <div class="card"><div class="card-head"><div><div class="card-title">Recente activiteit</div><div class="card-sub">Team-acties</div></div><button class="btn btn-gh" style="padding:5px 11px;font-size:11.5px" onclick="go('audit')">Alles</button></div><div class="card-body" style="padding-top:8px;padding-bottom:8px">${AUDIT.slice(0,4).map(a=>`<div class="tl-item" style="padding:8px 0"><div class="tl-dot" style="width:28px;height:28px">${IC[a.i]}</div><div style="flex:1;min-width:0"><div style="font-size:12.5px;line-height:1.4">${a.act}</div><div style="font-size:11px;color:var(--ink3);margin-top:1px"><span style="font-family:var(--mono)">${a.tgt}</span> · ${a.t}</div></div></div>`).join('')}</div></div>
     </div>
     <div class="card">
@@ -1849,6 +1850,43 @@ function showMrrList(){
   document.body.style.overflow='hidden';
 }
 function closeMrrList(e){if(e&&e.target!==document.getElementById('mrr-ov'))return;document.getElementById('mrr-ov').classList.remove('open');document.body.style.overflow='';}
+
+// ══════ GRAFIEK-CIJFERS ZELF AANPASSEN (churn trend / risicoklanten per maand) ══════
+function openTrendEditor(type){
+  const isChurn=type==='churn';
+  const titel=isChurn?'Churn trend aanpassen':'Risicoklanten per maand aanpassen';
+  const oms=isChurn?'Vul per maand in hoeveel klanten zijn gechurnd.':'Vul per maand in hoeveel klanten een hoog of kritiek risico hadden.';
+  const veld=isChurn?'c':'r';
+  const rows=CHURN_HIST.map((d,i)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)">
+      <span style="font-size:13.5px;font-weight:600;color:var(--ink);width:48px">${d.m}</span>
+      <input type="number" min="0" max="9999" value="${d[veld]}" id="trend-in-${i}" style="width:90px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-weight:600;text-align:center;font-family:var(--mono);color:var(--green-d)"/>
+    </div>`).join('');
+  document.getElementById('trend-sheet').innerHTML=`
+    <div class="card-head" style="position:sticky;top:0;background:var(--surface);z-index:5;border-radius:var(--rx) var(--rx) 0 0">
+      <div><div class="card-sub" style="margin-bottom:2px">Cijfers aanpassen</div><div class="card-title" style="font-size:16px">${titel}</div></div>
+      <button class="tb-btn" onclick="closeTrendEditor()" style="box-shadow:none">✕</button>
+    </div>
+    <div style="padding:16px 21px 21px">
+      <div style="font-size:12.5px;color:var(--ink3);margin-bottom:14px">${oms} De grafiek wordt direct bijgewerkt.</div>
+      <div style="max-height:46vh;overflow-y:auto;margin-bottom:16px">${rows}</div>
+      <div style="display:flex;justify-content:flex-end;gap:9px">
+        <button class="btn btn-gh" onclick="closeTrendEditor()">Annuleren</button>
+        <button class="btn btn-pri" onclick="saveTrendEditor('${type}')">Opslaan</button>
+      </div>
+    </div>`;
+  document.getElementById('trend-ov').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeTrendEditor(e){if(e&&e.target!==document.getElementById('trend-ov'))return;document.getElementById('trend-ov').classList.remove('open');document.body.style.overflow='';}
+function saveTrendEditor(type){
+  const veld=type==='churn'?'c':'r';
+  CHURN_HIST.forEach((d,i)=>{const el=document.getElementById('trend-in-'+i);if(el)d[veld]=Math.max(0,parseInt(el.value,10)||0);});
+  closeTrendEditor();
+  logAction(type==='churn'?'Churn trend-cijfers aangepast':'Risicoklanten-cijfers aangepast',ME?ME.name:'');
+  render();
+  showToast('Cijfers bijgewerkt.','success');
+}
 function renderChurnPicker(){
   const q=churnPickSearch.trim().toLowerCase();
   const churnedIds=new Set(CHURNED.map(c=>c.id));
@@ -2051,7 +2089,7 @@ function drawCharts(){
   cdestroy('donut');const dn=document.getElementById('donut');
   if(dn){const k=CUSTOMERS.filter(c=>c.risk.label==='Kritiek').length,hh=CUSTOMERS.filter(c=>c.risk.label==='Hoog').length,m=CUSTOMERS.filter(c=>c.risk.label==='Middel').length,l=CUSTOMERS.filter(c=>c.risk.label==='Laag').length;const labelsArr=['Kritiek','Hoog','Middel','Laag'];const donutTip=Object.assign({},tip(),{callbacks:{title:items=>labelsArr[items[0].dataIndex],label:item=>{const lbl=labelsArr[item.dataIndex];const ids=CUSTOMERS.filter(c=>c.risk.label===lbl).map(c=>c.id);return ids.length?ids:['Geen klanten'];}}});charts['donut']=new Chart(dn,{type:'doughnut',data:{labels:labelsArr,datasets:[{data:[k,hh,m,l],backgroundColor:[hex('var(--crit)'),hex('var(--high)'),hex('var(--med)'),hex('var(--low)')],borderWidth:0,spacing:2}]},options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{animateRotate:true,duration:900},plugins:{legend:{display:false},tooltip:donutTip}}});}
 }
-document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();const s=document.getElementById('gsearch');if(s)s.focus();}if(e.key==='Escape'){closeDetail();closeChurn();closeProfile();closeActionModal();closeMrrList();closeChurnPicker();}});
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();const s=document.getElementById('gsearch');if(s)s.focus();}if(e.key==='Escape'){closeDetail();closeChurn();closeProfile();closeActionModal();closeMrrList();closeChurnPicker();closeTrendEditor();}});
 
 // INIT — toont registratie/login scherm (shell is verborgen tot login)
 switchAuth('login');
