@@ -477,12 +477,19 @@ function calcRisk(c){
   // 1) Geen boekhoudkoppeling — vol gewicht
   if(!c.kop){score+=WEIGHTS.koppeling;flags.push({t:"crit",m:"Geen boekhoudkoppeling",i:"link"});}
 
-  // 2) Inactiviteit — vanaf 10 dagen, schaalt op naar vol gewicht rond 60 dagen
+  // 2) Inactiviteit — vanaf 10 dagen, schaalt op. Boven 50 dagen = vrijwel altijd Kritiek.
   if(c.act>10){
-    const f=Math.min(1,(c.act-10)/50); // 10d=0%, 60d=100%
-    const add=Math.round(WEIGHTS.inactief*f);
+    const f=Math.min(1,(c.act-10)/40); // 10d=0%, 50d=100%
+    let add=Math.round(WEIGHTS.inactief*f);
     score+=add;
-    flags.push({t:c.act>=45?"crit":"warn",m:`${c.act} dagen inactief`,i:"clock"});
+    if(c.act>50){
+      // Klanten die langer dan 50 dagen inactief zijn, beschouwen we als kritiek:
+      // extra ophoging zodat de totaalscore boven de Kritiek-drempel uitkomt.
+      score+=Math.max(0,THRESHOLDS.kritiek-WEIGHTS.inactief);
+      flags.push({t:"crit",m:`${c.act} dagen inactief — als kritiek beschouwd`,i:"clock"});
+    }else{
+      flags.push({t:c.act>=40?"crit":"warn",m:`${c.act} dagen inactief`,i:"clock"});
+    }
   }
 
   // 3) Support tickets — vanaf 3, vol gewicht bij 7+
@@ -1220,6 +1227,7 @@ const COLS=[
   {k:"last_login",d:"Laatste login (datum)",app:"Activiteit"},
   {k:"bookkeeping_program",d:"Boekhoudkoppeling (yes/no)",app:"Boekhoudkoppeling"},
   {k:"team_partner",d:"Partner (yes/no)",app:"Partner"},
+  {k:"tickets",d:"Support­tickets deze maand (optioneel)",app:"Tickets",optioneel:true},
 ];
 // Branche-vertaling van export naar nette NL-naam
 const BRANCHE_MAP={Trade:'Handel',Ecommerce:'E-commerce',Fashion:'Mode',Food:'Voeding',Production:'Productie',Technical:'Technisch',Default:'Overig'};
@@ -1478,8 +1486,8 @@ function pCSV(f){
       // detecteer scheidingsteken (; of ,)
       const sep=lines[0].split(';').length>=lines[0].split(',').length?';':',';
       const hd=lines[0].split(sep).map(x=>x.trim());
-      // controleer verplichte kolommen — 'price' of (oud) 'price_plan' is toegestaan
-      const required=COLS.map(c=>c.k).filter(k=>k!=='price');
+      // controleer verplichte kolommen — 'price' of (oud) 'price_plan' is toegestaan, optionele kolommen niet vereist
+      const required=COLS.filter(c=>!c.optioneel).map(c=>c.k).filter(k=>k!=='price');
       const miss=required.filter(k=>!hd.includes(k));
       const hasPrice=hd.includes('price'), hasPlan=hd.includes('price_plan');
       if(!hasPrice&&!hasPlan)miss.push('price');
@@ -1522,7 +1530,7 @@ function pCSV(f){
           kop:yesNo(row.bookkeeping_program),
           partner:yesNo(row.team_partner),
           onb:true,
-          tickets:simTickets(row.relation_ID,act),
+          tickets:(row.tickets!==undefined&&row.tickets!==''?(parseInt(row.tickets,10)||0):simTickets(row.relation_ID,act)),
           bedrag:bedragHist
         };
       });
