@@ -1498,13 +1498,21 @@ function pCSV(f){
         const bedrag=hasPrice?(parseFloat(String(row.price).replace(',','.'))||0):planBedrag(row.price_plan);
         // afgeleid abonnementslabel op basis van het bedrag (alleen ter weergave)
         const subLabel=hasPrice?bedragNaarPlan(bedrag):cleanPlan(row.price_plan);
-        // synthetische 6-maands historie rond de huidige waarde (voor trendgrafieken)
+        // 6-maands historie (oudste → nieuwste). De laatste maand = huidige.
+        // Belangrijk: als een klant X dagen inactief is, kan die de recente maanden
+        // GEEN orders meer hebben geplaatst. We zetten de orders van die maanden op 0.
+        const maandenInactief=Math.floor(act/30); // hoeveel recente maanden zonder orders
         const trend=(base,vary)=>{const arr=[];for(let i=5;i>=0;i--){const factor=1+(i*vary);arr.push(Math.max(0,Math.round(base*factor)));}return arr;};
-        // als orders 0 zijn maar lang inactief: aflopende trend; anders licht stabiel
-        const orderHist=orderCount===0?trend(Math.max(orderCount,act>120?3:0),0.15):trend(orderCount,0.04);
-        orderHist[orderHist.length-1]=orderCount; // laatste = echte waarde
-        // bedrag-historie licht variërend rond het echte bedrag, laatste = echte waarde
-        const bedragHist=trend(bedrag,0.02);bedragHist[bedragHist.length-1]=Math.round(bedrag*100)/100;
+        // ORDERS: rond het totaal, recente inactieve maanden op 0
+        let orderHist=trend(orderCount>0?orderCount:0,0.04);
+        if(maandenInactief>0){
+          for(let i=0;i<Math.min(maandenInactief,6);i++){orderHist[5-i]=0;}
+        }else{
+          orderHist[orderHist.length-1]=orderCount; // recent actief → laatste = echte waarde
+        }
+        // OMZET (MRR): het abonnement loopt door, ook bij inactiviteit (klant betaalt nog).
+        // Daarom blijft het maandbedrag staan — dat is juist waarom de klant churn-risico is.
+        let bedragHist=trend(bedrag,0.02);bedragHist[bedragHist.length-1]=Math.round(bedrag*100)/100;
         return {
           id:'K-'+String(row.relation_ID).padStart(4,'0'),
           branche:BRANCHE_MAP[row.company_branche]||row.company_branche||'Overig',
