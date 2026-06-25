@@ -435,41 +435,87 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
 <script>
 // DATA
 const RAW=[
-  {id:"K-0012",branche:"Logistiek",onb:true, partner:false,sub:"Pro",       orders:[22,19,18,14,10,3], act:47,kop:false,bedrag:[980,920,890,750,640,420]},
-  {id:"K-0031",branche:"Retail",   onb:false,partner:true, sub:"Starter",   orders:[15,14,12,8,4,1],   act:62,kop:false,bedrag:[450,440,410,350,280,110]},
-  {id:"K-0044",branche:"Bouw",     onb:true, partner:false,sub:"Enterprise",orders:[40,38,41,35,30,8], act:35,kop:true, bedrag:[2100,2050,2080,1900,1700,820]},
-  {id:"K-0057",branche:"Zorg",     onb:true, partner:false,sub:"Pro",       orders:[18,20,17,19,16,2], act:12,kop:true, bedrag:[890,920,870,910,800,180]},
-  {id:"K-0063",branche:"Logistiek",onb:false,partner:false,sub:"Starter",   orders:[9,8,6,3,1,0],      act:91,kop:false,bedrag:[320,300,250,180,90,0]},
-  {id:"K-0078",branche:"Financieel",onb:true,partner:true, sub:"Pro",       orders:[30,28,31,29,27,14],act:5, kop:true, bedrag:[1400,1380,1420,1360,1310,980]},
-  {id:"K-0082",branche:"Retail",   onb:true, partner:false,sub:"Enterprise",orders:[25,26,24,22,21,19],act:3, kop:true, bedrag:[1800,1820,1790,1760,1740,1680]},
-  {id:"K-0095",branche:"Bouw",     onb:false,partner:true, sub:"Starter",   orders:[20,18,17,15,12,4], act:28,kop:true, bedrag:[760,720,700,640,540,280]},
-  {id:"K-0101",branche:"Zorg",     onb:true, partner:false,sub:"Pro",       orders:[12,11,9,5,2,0],    act:55,kop:false,bedrag:[580,560,500,380,220,0]},
-  {id:"K-0117",branche:"Financieel",onb:true,partner:false,sub:"Enterprise",orders:[28,29,30,28,27,22],act:1, kop:true, bedrag:[1950,1960,1980,1940,1920,1800]},
-  {id:"K-0123",branche:"Logistiek",onb:false,partner:false,sub:"Pro",       orders:[19,17,15,12,9,5],  act:38,kop:false,bedrag:[820,760,700,590,460,340]},
-  {id:"K-0138",branche:"Retail",   onb:true, partner:true, sub:"Starter",   orders:[13,14,12,13,11,11],act:7, kop:true, bedrag:[490,500,470,490,430,430]},
-  {id:"K-0145",branche:"Bouw",     onb:true, partner:false,sub:"Pro",       orders:[24,22,20,18,15,6], act:22,kop:true, bedrag:[1050,980,920,840,710,420]},
-  {id:"K-0159",branche:"Zorg",     onb:false,partner:true, sub:"Starter",   orders:[8,7,6,5,3,0],      act:80,kop:false,bedrag:[290,270,240,200,130,0]},
-  {id:"K-0167",branche:"Financieel",onb:true,partner:false,sub:"Enterprise",orders:[35,34,36,33,31,28],act:2, kop:true, bedrag:[2200,2190,2210,2170,2140,2050]},
+  {id:"K-0012",branche:"Logistiek",onb:true, partner:false,sub:"Pro",       orders:[22,19,18,14,10,3], act:47,kop:false,tickets:8, bedrag:[980,920,890,750,640,420]},
+  {id:"K-0031",branche:"Retail",   onb:false,partner:true, sub:"Starter",   orders:[15,14,12,8,4,1],   act:62,kop:false,tickets:11, bedrag:[450,440,410,350,280,110]},
+  {id:"K-0044",branche:"Bouw",     onb:true, partner:false,sub:"Enterprise",orders:[40,38,41,35,30,8], act:35,kop:true, tickets:6, bedrag:[2100,2050,2080,1900,1700,820]},
+  {id:"K-0057",branche:"Zorg",     onb:true, partner:false,sub:"Pro",       orders:[18,20,17,19,16,2], act:12,kop:true, tickets:2, bedrag:[890,920,870,910,800,180]},
+  {id:"K-0063",branche:"Logistiek",onb:false,partner:false,sub:"Starter",   orders:[9,8,6,3,1,0],      act:91,kop:false,tickets:11, bedrag:[320,300,250,180,90,0]},
+  {id:"K-0078",branche:"Financieel",onb:true,partner:true, sub:"Pro",       orders:[30,28,31,29,27,14],act:5, kop:true, tickets:2, bedrag:[1400,1380,1420,1360,1310,980]},
+  {id:"K-0082",branche:"Retail",   onb:true, partner:false,sub:"Enterprise",orders:[25,26,24,22,21,19],act:3, kop:true, tickets:2, bedrag:[1800,1820,1790,1760,1740,1680]},
+  {id:"K-0095",branche:"Bouw",     onb:false,partner:true, sub:"Starter",   orders:[20,18,17,15,12,4], act:28,kop:true, tickets:4, bedrag:[760,720,700,640,540,280]},
+  {id:"K-0101",branche:"Zorg",     onb:true, partner:false,sub:"Pro",       orders:[12,11,9,5,2,0],    act:55,kop:false,tickets:8, bedrag:[580,560,500,380,220,0]},
+  {id:"K-0117",branche:"Financieel",onb:true,partner:false,sub:"Enterprise",orders:[28,29,30,28,27,22],act:1, kop:true, tickets:2, bedrag:[1950,1960,1980,1940,1920,1800]},
+  {id:"K-0123",branche:"Logistiek",onb:false,partner:false,sub:"Pro",       orders:[19,17,15,12,9,5],  act:38,kop:false,tickets:8, bedrag:[820,760,700,590,460,340]},
+  {id:"K-0138",branche:"Retail",   onb:true, partner:true, sub:"Starter",   orders:[13,14,12,13,11,11],act:7, kop:true, tickets:2, bedrag:[490,500,470,490,430,430]},
+  {id:"K-0145",branche:"Bouw",     onb:true, partner:false,sub:"Pro",       orders:[24,22,20,18,15,6], act:22,kop:true, tickets:4, bedrag:[1050,980,920,840,710,420]},
+  {id:"K-0159",branche:"Zorg",     onb:false,partner:true, sub:"Starter",   orders:[8,7,6,5,3,0],      act:80,kop:false,tickets:11, bedrag:[290,270,240,200,130,0]},
+  {id:"K-0167",branche:"Financieel",onb:true,partner:false,sub:"Enterprise",orders:[35,34,36,33,31,28],act:2, kop:true, tickets:2, bedrag:[2200,2190,2210,2170,2140,2050]},
 ];
+// ════════════════ RISICOMODEL — instelbare gewichten ════════════════
+// De Teamlead kan deze gewichten aanpassen via "Risico-instellingen".
+// Standaardwaarden (op te slaan/laden uit de database).
+const DEFAULT_WEIGHTS={
+  koppeling:20,    // geen boekhoudkoppeling
+  inactief:40,     // >10 dagen inactief (schaalt op met aantal dagen)
+  tickets:40,      // ≥7 support­tickets per maand (schaalt op)
+  ordersdaling:30, // orders sterk gedaald
+  omzetdaling:20,  // maandomzet gedaald
+  onboarding:10    // onboarding niet voltooid
+};
+let WEIGHTS={...DEFAULT_WEIGHTS};
+// Drempels Kritiek/Hoog/Middel (ook instelbaar)
+const DEFAULT_THRESHOLDS={kritiek:75,hoog:50,middel:25};
+let THRESHOLDS={...DEFAULT_THRESHOLDS};
+
 function calcRisk(c){
   const recent=c.orders[c.orders.length-1],avg4=c.orders.slice(0,4).reduce((a,b)=>a+b,0)/4;
   const drop=avg4>0?(avg4-recent)/avg4:1;
   const rb=c.bedrag[c.bedrag.length-1],ab=c.bedrag.slice(0,4).reduce((a,b)=>a+b,0)/4,bdrop=ab>0?(ab-rb)/ab:0;
+  const tickets=c.tickets||0;
   let score=0,flags=[];
-  if(!c.kop){score+=70;flags.push({t:"crit",m:"Geen boekhoudkoppeling",i:"link"});}
-  if(drop>=0.5){score=Math.min(100,score+85);flags.push({t:"crit",m:`Orders −${Math.round(drop*100)}% t.o.v. gemiddelde`,i:"down"});}
-  else if(drop>=0.3){score=Math.min(100,score+45);flags.push({t:"warn",m:`Orders −${Math.round(drop*100)}% t.o.v. gemiddelde`,i:"down"});}
-  if(c.act>=60){score=Math.min(100,score+30);flags.push({t:"crit",m:`${c.act} dagen inactief`,i:"clock"});}
-  else if(c.act>=30){score=Math.min(100,score+15);flags.push({t:"warn",m:`${c.act} dagen inactief`,i:"clock"});}
-  if(bdrop>=0.3){score=Math.min(100,score+20);flags.push({t:"warn",m:`Omzet €${Math.round(ab)} → €${rb}`,i:"euro"});}
-  if(!c.onb)score=Math.min(100,score+5);
-  score=Math.min(100,Math.round(score));
+
+  // 1) Geen boekhoudkoppeling — vol gewicht
+  if(!c.kop){score+=WEIGHTS.koppeling;flags.push({t:"crit",m:"Geen boekhoudkoppeling",i:"link"});}
+
+  // 2) Inactiviteit — vanaf 10 dagen, schaalt op naar vol gewicht rond 60 dagen
+  if(c.act>10){
+    const f=Math.min(1,(c.act-10)/50); // 10d=0%, 60d=100%
+    const add=Math.round(WEIGHTS.inactief*f);
+    score+=add;
+    flags.push({t:c.act>=45?"crit":"warn",m:`${c.act} dagen inactief`,i:"clock"});
+  }
+
+  // 3) Support tickets — vanaf 3, vol gewicht bij 7+
+  if(tickets>=3){
+    const f=Math.min(1,(tickets-2)/5); // 3=20%, 7+=100%
+    const add=Math.round(WEIGHTS.tickets*f);
+    score+=add;
+    flags.push({t:tickets>=7?"crit":"warn",m:`${tickets} supporttickets deze maand`,i:"ticket"});
+  }
+
+  // 4) Orders gedaald — >50% vol, >30% half
+  if(drop>=0.5){score+=WEIGHTS.ordersdaling;flags.push({t:"crit",m:`Orders −${Math.round(drop*100)}% t.o.v. gemiddelde`,i:"down"});}
+  else if(drop>=0.3){score+=Math.round(WEIGHTS.ordersdaling*0.5);flags.push({t:"warn",m:`Orders −${Math.round(drop*100)}% t.o.v. gemiddelde`,i:"down"});}
+
+  // 5) Omzetdaling ≥30%
+  if(bdrop>=0.3){score+=WEIGHTS.omzetdaling;flags.push({t:"warn",m:`Omzet €${Math.round(ab)} → €${Math.round(rb)}`,i:"euro"});}
+
+  // 6) Onboarding niet voltooid
+  if(!c.onb){score+=WEIGHTS.onboarding;flags.push({t:"warn",m:"Onboarding niet voltooid",i:"flag"});}
+
+  // handmatige override door Teamlead (indien gezet)
+  if(typeof c.scoreOverride==='number'){
+    score=c.scoreOverride;
+    flags.unshift({t:"crit",m:"Score handmatig aangepast door Teamlead",i:"edit"});
+  }
+
+  score=Math.max(0,Math.min(100,Math.round(score)));
   let label,color,soft;
-  if(score>=75){label="Kritiek";color="var(--crit)";soft="b-crit";}
-  else if(score>=50){label="Hoog";color="var(--high)";soft="b-high";}
-  else if(score>=25){label="Middel";color="var(--med)";soft="b-med";}
+  if(score>=THRESHOLDS.kritiek){label="Kritiek";color="var(--crit)";soft="b-crit";}
+  else if(score>=THRESHOLDS.hoog){label="Hoog";color="var(--high)";soft="b-high";}
+  else if(score>=THRESHOLDS.middel){label="Middel";color="var(--med)";soft="b-med";}
   else{label="Laag";color="var(--low)";soft="b-low";}
-  return {score,label,color,soft,flags,recent,avg:Math.round(avg4),rb,ab:Math.round(ab),bdrop};
+  return {score,label,color,soft,flags,recent,avg:Math.round(avg4),rb,ab:Math.round(ab),bdrop,tickets};
 }
 let CUSTOMERS=RAW.map(c=>({...c,risk:calcRisk(c)})).sort((a,b)=>b.risk.score-a.risk.score);
 let URGENT=CUSTOMERS.filter(c=>["Kritiek","Hoog"].includes(c.risk.label));
@@ -505,6 +551,8 @@ function relTime(ts){
 async function loadAllData(){
   if(!sb)return;
   try{
+    // RISICO-INSTELLINGEN eerst laden (gewichten/drempels) zodat scores kloppen
+    await loadSettings();
     // KLANTEN — haal alle klanten op (expliciete hoge limiet zodat alle 547 meekomen)
     const {data:kl,error:klErr}=await sb.from('klanten').select('*').order('klant_id',{ascending:true}).limit(5000);
     if(klErr){console.error('Klanten laden fout:',klErr);showToast('Klanten laden mislukt: '+(klErr.message||''),'error');}
@@ -514,7 +562,8 @@ async function loadAllData(){
         id:r.klantcode, branche:r.branche||'Overig', sub:r.subscriptie||'Onbekend',
         orders:r.orders_historie||[0,0,0,0,0,r.aantal_orders||0],
         bedrag:r.bedrag_historie||[r.maandbedrag||0,r.maandbedrag||0,r.maandbedrag||0,r.maandbedrag||0,r.maandbedrag||0,r.maandbedrag||0],
-        act:r.dagen_inactief||0, kop:!!r.boekhoudkoppeling, partner:!!r.partner, onb:r.onboarding_voltooid!==false
+        act:r.dagen_inactief||0, kop:!!r.boekhoudkoppeling, partner:!!r.partner, onb:r.onboarding_voltooid!==false,
+        tickets:(r.tickets!=null?r.tickets:simTickets(r.klantcode.replace(/\D/g,''),r.dagen_inactief||0))
       }));
       rebuildCustomers(arr);
     }else{
@@ -536,6 +585,8 @@ function hex(c){return c&&c.startsWith('var(')?CSSVAR(c):c;}
 // ICONS
 const IC={
   link:'<svg viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5l3-3M5 8L3.5 9.5a2.1 2.1 0 003 3L8 11M11 8l1.5-1.5a2.1 2.1 0 00-3-3L8 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+  ticket:'<svg viewBox="0 0 16 16" fill="none"><path d="M2.5 5.5A1 1 0 013.5 4.5h9a1 1 0 011 1V7a1.2 1.2 0 000 2.4v1.1a1 1 0 01-1 1h-9a1 1 0 01-1-1V9.4A1.2 1.2 0 002.5 7V5.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4.5v7" stroke="currentColor" stroke-width="1.3" stroke-dasharray="1.5 1.5"/></svg>',
+  edit:'<svg viewBox="0 0 16 16" fill="none"><path d="M11 2.5l2.5 2.5M3 13l-.5 1.5L4 14l8-8-2.5-2.5-8 8z" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   down:'<svg viewBox="0 0 16 16" fill="none"><path d="M3 5l5 6 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   clock:'<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3l2 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
   euro:'<svg viewBox="0 0 16 16" fill="none"><path d="M11 4.5a4 4 0 100 7M3.5 7h5M3.5 9.5h4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
@@ -581,7 +632,7 @@ function mapUser(row){
     role:row.rol, functie:row.functie||row.rol||'Medewerker', geverifieerd:row.geverifieerd,
     av:initials(row.naam), color:AVATAR_COLORS[(row.gebruiker_id||0)%AVATAR_COLORS.length],
     // Voorlopig krijgt iedereen dezelfde (volledige) rechten
-    perms:["dashboard","klanten","alerts","audit","import","export"]
+    perms:["dashboard","klanten","alerts","audit","import","export","risico"]
   };
 }
 const AVATAR_COLORS=["#247a59","#2f9e74","#5cb89a","#1f7a4d","#3d9b7a"];
@@ -989,6 +1040,7 @@ const ALLTABS=[
   {k:'audit',l:'Activiteitenlog',grp:'Monitoring',icon:'<svg class="ni" viewBox="0 0 20 20" fill="none"><path d="M4 3.5h9l3 3v10a.5.5 0 01-.5.5h-11a.5.5 0 01-.5-.5v-13z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 9h6M7 12h6M7 15h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'},
   {k:'import',l:'Data-import',grp:'Beheer',icon:'<svg class="ni" viewBox="0 0 20 20" fill="none"><path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13v2.5A1.5 1.5 0 004.5 17h11a1.5 1.5 0 001.5-1.5V13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'},
   {k:'export',l:'Data-export',grp:'Beheer',icon:'<svg class="ni" viewBox="0 0 20 20" fill="none"><path d="M10 3v10m0 0l-3.5-3.5M10 13l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13v2.5A1.5 1.5 0 004.5 17h11a1.5 1.5 0 001.5-1.5V13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'},
+  {k:'risico',l:'Risico-instellingen',grp:'Beheer',icon:'<svg class="ni" viewBox="0 0 20 20" fill="none"><path d="M10 2.5l1.4 1.1 1.8-.2.6 1.7 1.5 1 0 1.8 1 1.5-1 1.5 0 1.8-1.5 1 -.6 1.7-1.8-.2L10 17.5l-1.4-1.1-1.8.2-.6-1.7-1.5-1 0-1.8-1-1.5 1-1.5 0-1.8 1.5-1 .6-1.7 1.8.2L10 2.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.4"/></svg>'},
 ];
 const LOCKIC='<svg class="ni" viewBox="0 0 16 16" fill="none" style="opacity:0.55"><rect x="3.5" y="7" width="9" height="6.5" rx="1.3" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.4"/></svg>';
 function buildNav(){
@@ -1022,10 +1074,10 @@ function showToast(msg,type){
 
 // ROUTING
 let tab='dashboard';
-const META={dashboard:{c:'Werkruimte',t:'Dashboard'},klanten:{c:'Werkruimte',t:'Klanten'},alerts:{c:'Monitoring',t:'Alerts'},audit:{c:'Monitoring',t:'Activiteitenlog'},import:{c:'Beheer',t:'Data-import'},export:{c:'Beheer',t:'Data-export'}};
+const META={dashboard:{c:'Werkruimte',t:'Dashboard'},klanten:{c:'Werkruimte',t:'Klanten'},alerts:{c:'Monitoring',t:'Alerts'},audit:{c:'Monitoring',t:'Activiteitenlog'},import:{c:'Beheer',t:'Data-import'},export:{c:'Beheer',t:'Data-export'},risico:{c:'Beheer',t:'Risico-instellingen'}};
 function go(t){if(ME&&!ME.perms.includes(t)){denyAccess(META[t].t);return;}hideDistPop();tab=t;document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));document.getElementById('tb-title').textContent=META[t].t;document.getElementById('main').scrollTop=0;render();}
 function gSearch(v){if(tab!=='klanten')go('klanten');kf.search=v;if(tab==='klanten'){document.getElementById('main').innerHTML=renderKlanten();requestAnimationFrame(drawCharts);}}
-function render(){hideDistPop();const m=document.getElementById('main');({dashboard:()=>m.innerHTML=renderDash(),klanten:()=>m.innerHTML=renderKlanten(),alerts:()=>m.innerHTML=renderAlerts(),audit:()=>m.innerHTML=renderAudit(),import:()=>m.innerHTML=renderImport(),export:()=>m.innerHTML=renderExport()})[tab]();requestAnimationFrame(drawCharts);}
+function render(){hideDistPop();const m=document.getElementById('main');({dashboard:()=>m.innerHTML=renderDash(),klanten:()=>m.innerHTML=renderKlanten(),alerts:()=>m.innerHTML=renderAlerts(),audit:()=>m.innerHTML=renderAudit(),import:()=>m.innerHTML=renderImport(),export:()=>m.innerHTML=renderExport(),risico:()=>m.innerHTML=renderRisico()})[tab]();requestAnimationFrame(drawCharts);}
 
 // DASHBOARD
 function renderDash(){
@@ -1184,6 +1236,107 @@ function daysSince(dateStr){
 }
 let impRows=[],impErr='',impOK=false,impParsed=[];
 
+// ════════════════ RISICO-INSTELLINGEN (gewichten aanpassen) ════════════════
+const WEIGHT_INFO=[
+  {k:'koppeling',label:'Geen boekhoudkoppeling',oms:'Klant heeft geen actieve boekhoudkoppeling.',max:50},
+  {k:'inactief',label:'Inactiviteit (>10 dagen)',oms:'Schaalt op met het aantal dagen sinds de laatste login (vol gewicht rond 60 dagen).',max:60},
+  {k:'tickets',label:'Support­tickets (≥3 per maand)',oms:'Schaalt op met het aantal tickets (vol gewicht bij 7 of meer).',max:60},
+  {k:'ordersdaling',label:'Orders gedaald',oms:'Vol gewicht bij >50% daling, half bij >30%.',max:50},
+  {k:'omzetdaling',label:'Omzetdaling (≥30%)',oms:'Maandomzet (MRR) is met 30% of meer gedaald.',max:40},
+  {k:'onboarding',label:'Onboarding niet voltooid',oms:'De klant heeft de onboarding niet afgerond.',max:30},
+];
+function renderRisico(){
+  const isLead=ME&&ME.role&&ME.role.includes('Teamlead');
+  const totaalGewicht=Object.values(WEIGHTS).reduce((a,b)=>a+b,0);
+  const slider=(w)=>`
+    <div style="padding:15px 0;border-bottom:1px solid var(--line)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:7px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:var(--ink)">${w.label}</div>
+          <div style="font-size:12px;color:var(--ink3);margin-top:2px">${w.oms}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <input type="number" id="w-${w.k}" min="0" max="${w.max}" value="${WEIGHTS[w.k]}" ${isLead?'':'disabled'} oninput="document.getElementById('wv-${w.k}').textContent=this.value" style="width:64px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-weight:700;text-align:center;color:var(--green-d);font-family:var(--mono)"/>
+          <span style="font-size:12px;color:var(--ink4)">punten</span>
+        </div>
+      </div>
+      <input type="range" min="0" max="${w.max}" value="${WEIGHTS[w.k]}" ${isLead?'':'disabled'} oninput="document.getElementById('w-${w.k}').value=this.value;document.getElementById('wv-${w.k}').textContent=this.value" style="width:100%;accent-color:var(--green)"/>
+    </div>`;
+  return `<div class="page">
+    <div class="page-head"><h1 class="page-h1">Risico-instellingen</h1><p class="page-desc">Stel in hoe zwaar elke factor meeweegt in de risicoscore. Pas de gewichten aan als bepaalde signalen belangrijker blijken te worden.</p></div>
+
+    ${isLead?'':`<div class="card" style="margin-bottom:16px;background:var(--high-soft);border-color:var(--high)"><div class="card-body" style="display:flex;gap:11px;align-items:center"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" style="flex-shrink:0;color:var(--high)"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M9 5.5v4M9 12h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><div style="font-size:13px;color:var(--ink2)">Alleen een <b>Teamlead</b> kan de gewichten aanpassen. Je kunt ze hier wel bekijken.</div></div></div>`}
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body">
+        <div class="card-title" style="font-size:15px;margin-bottom:4px">Gewichten per risicofactor</div>
+        <div class="card-sub" style="margin-bottom:6px">Hoeveel punten elke factor maximaal bijdraagt aan de score (0–100).</div>
+        ${WEIGHT_INFO.map(slider).join('')}
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;gap:12px">
+          <div style="font-size:12.5px;color:var(--ink3)">Som van alle gewichten: <b id="w-totaal" style="color:var(--ink)">${totaalGewicht}</b> punten ${totaalGewicht>100?'<span style="color:var(--high)">· scores worden afgetopt op 100</span>':''}</div>
+          ${isLead?`<div style="display:flex;gap:9px">
+            <button class="btn btn-gh" onclick="resetWeights()">Standaard herstellen</button>
+            <button class="btn btn-pri" onclick="saveWeights()">Opslaan & toepassen</button>
+          </div>`:''}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="card-title" style="font-size:15px;margin-bottom:4px">Drempelwaarden niveaus</div>
+        <div class="card-sub" style="margin-bottom:12px">Vanaf welke score een klant Kritiek, Hoog of Middel risico is.</div>
+        ${['kritiek','hoog','middel'].map(lvl=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)">
+            <span style="font-size:14px;font-weight:600;text-transform:capitalize;color:${lvl==='kritiek'?'var(--crit)':lvl==='hoog'?'var(--high)':'var(--med)'}">${lvl} vanaf</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="number" id="t-${lvl}" min="0" max="100" value="${THRESHOLDS[lvl]}" ${isLead?'':'disabled'} style="width:64px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-weight:700;text-align:center;font-family:var(--mono)"/>
+              <span style="font-size:12px;color:var(--ink4)">punten</span>
+            </div>
+          </div>`).join('')}
+        ${isLead?`<div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="btn btn-pri" onclick="saveThresholds()">Drempels opslaan</button></div>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+async function saveWeights(){
+  WEIGHT_INFO.forEach(w=>{const el=document.getElementById('w-'+w.k);if(el)WEIGHTS[w.k]=Math.max(0,Math.min(w.max,parseInt(el.value,10)||0));});
+  await persistSettings();
+  rebuildCustomers(CUSTOMERS.map(stripRisk));
+  logAction('Risicogewichten aangepast',ME?ME.name:'');
+  showToast('Gewichten opgeslagen en toegepast op alle klanten.','success');
+  render();
+}
+async function saveThresholds(){
+  ['kritiek','hoog','middel'].forEach(l=>{const el=document.getElementById('t-'+l);if(el)THRESHOLDS[l]=Math.max(0,Math.min(100,parseInt(el.value,10)||0));});
+  await persistSettings();
+  rebuildCustomers(CUSTOMERS.map(stripRisk));
+  logAction('Risicodrempels aangepast',ME?ME.name:'');
+  showToast('Drempelwaarden opgeslagen.','success');
+  render();
+}
+function resetWeights(){WEIGHTS={...DEFAULT_WEIGHTS};THRESHOLDS={...DEFAULT_THRESHOLDS};render();showToast('Standaardwaarden hersteld (nog niet opgeslagen).','success');}
+// verwijdert het berekende risk-object zodat rebuildCustomers het opnieuw berekent
+function stripRisk(c){const{risk,...rest}=c;return rest;}
+// slaat de instellingen op in de database (tabel app_instellingen)
+async function persistSettings(){
+  if(!sb)return;
+  try{
+    await sb.from('app_instellingen').upsert({id:1,gewichten:WEIGHTS,drempels:THRESHOLDS,bijgewerkt_op:new Date().toISOString()});
+  }catch(e){console.error('Instellingen opslaan mislukt:',e);}
+}
+// laadt de instellingen uit de database (bij opstarten)
+async function loadSettings(){
+  if(!sb)return;
+  try{
+    const {data}=await sb.from('app_instellingen').select('*').eq('id',1).maybeSingle();
+    if(data){
+      if(data.gewichten)WEIGHTS={...DEFAULT_WEIGHTS,...data.gewichten};
+      if(data.drempels)THRESHOLDS={...DEFAULT_THRESHOLDS,...data.drempels};
+    }
+  }catch(e){/* tabel bestaat mogelijk nog niet; standaardwaarden blijven gelden */}
+}
+
 // ════════════════ DATA-EXPORT ════════════════
 function renderExport(){
   const totaal=CUSTOMERS.length, kritiek=CUSTOMERS.filter(c=>c.risk.label==='Kritiek').length, hoog=CUSTOMERS.filter(c=>c.risk.label==='Hoog').length;
@@ -1302,6 +1455,15 @@ function hFile(e){if(!ME.perms.includes('import')){showToast('Actie geweigerd: a
 function planBedrag(plan){const p=cleanPlan(plan).toLowerCase();if(p.includes('x-large')||p.includes('global'))return 2200;if(p.includes('large')||p.includes('enterprise'))return 1500;if(p.includes('business')||p.includes('medium'))return 850;if(p.includes('small')||p.includes('startup'))return 350;return 600;}
 // Bepaalt een leesbaar abonnementslabel op basis van het echte maandbedrag
 function bedragNaarPlan(b){if(b>=1500)return'Enterprise';if(b>=800)return'Business';if(b>=400)return'Pro';if(b>=150)return'Starter';return'Basic';}
+// Simuleert het aantal supporttickets (deterministisch op basis van klantnummer + inactiviteit)
+// Inactievere klanten neigen naar meer tickets; stabiel tussen herladen.
+function simTickets(relId,act){
+  const seed=(parseInt(relId,10)||0);
+  let base=(seed*2654435761)%11;        // 0..10 pseudo-random maar stabiel
+  base=Math.abs(base)%9;                // 0..8
+  const bonus=act>40?2:act>20?1:0;      // inactieve klanten iets meer tickets
+  return Math.min(12,base+bonus);
+}
 function pCSV(f){
   if(!f)return;
   if(!ME.perms.includes('import')){showToast('Actie geweigerd: onvoldoende rechten.','error');return;}
@@ -1352,6 +1514,7 @@ function pCSV(f){
           kop:yesNo(row.bookkeeping_program),
           partner:yesNo(row.team_partner),
           onb:true,
+          tickets:simTickets(row.relation_ID,act),
           bedrag:bedragHist
         };
       });
@@ -1368,7 +1531,7 @@ function pCSV(f){
           try{
             const del=await sb.from('klanten').delete().neq('klant_id',-1); // leeg de tabel
             if(del.error){console.error('Verwijderen oude klanten:',del.error);showToast('Opslaan mislukt: '+(del.error.message||'kon tabel niet legen'),'error');return;}
-            const rows=impParsed.map(c=>({klantcode:c.id,branche:c.branche,subscriptie:c.sub,maandbedrag:c.bedrag[c.bedrag.length-1],aantal_orders:c.orders[c.orders.length-1],dagen_inactief:c.act,boekhoudkoppeling:c.kop,partner:c.partner,onboarding_voltooid:c.onb,status:'actief',orders_historie:c.orders,bedrag_historie:c.bedrag}));
+            const rows=impParsed.map(c=>({klantcode:c.id,branche:c.branche,subscriptie:c.sub,maandbedrag:c.bedrag[c.bedrag.length-1],aantal_orders:c.orders[c.orders.length-1],dagen_inactief:c.act,boekhoudkoppeling:c.kop,partner:c.partner,onboarding_voltooid:c.onb,tickets:c.tickets,status:'actief',orders_historie:c.orders,bedrag_historie:c.bedrag}));
             // in batches van 200 invoegen, met foutcontrole per batch
             let saved=0;
             for(let i=0;i<rows.length;i+=200){
