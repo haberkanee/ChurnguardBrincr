@@ -906,11 +906,22 @@ async function doLogin(ev){
   try{ await sb.from('gebruikers').update({laatste_login:new Date().toISOString()}).eq('gebruiker_id',row.gebruiker_id); }catch(e){}
   const remember=!!(document.getElementById('login-remember')&&document.getElementById('login-remember').checked);
   saveSession(row.gebruiker_id,remember);  // onthoud wie is ingelogd (overleeft verversen)
+  // Vraag de browser om de inloggegevens op te slaan (Chrome "wachtwoord opslaan?"-popup)
+  saveBrowserCredentials(email,pw,ME.name);
   document.getElementById('login-error').style.display='none';
   document.getElementById('login-success').style.display='none';
   await enterApp(true);
   logAction('Ingelogd',ME.email.split('@')[0]);
   return false;
+}
+// Laat de browser de inloggegevens opslaan via de Credential Management API
+function saveBrowserCredentials(email,pw,naam){
+  try{
+    if(window.PasswordCredential){
+      const cred=new window.PasswordCredential({id:email,password:pw,name:naam||email});
+      if(navigator.credentials&&navigator.credentials.store){navigator.credentials.store(cred);}
+    }
+  }catch(e){/* browser ondersteunt dit niet of gebruiker weigerde — geen probleem */}
 }
 // Bewaart / herstelt de actieve sessie zodat verversen niet uitlogt
 const SESSION_KEY='churnguard_session';
