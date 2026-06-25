@@ -1463,6 +1463,8 @@ function hFile(e){if(!ME.perms.includes('import')){showToast('Actie geweigerd: a
 function planBedrag(plan){const p=cleanPlan(plan).toLowerCase();if(p.includes('x-large')||p.includes('global'))return 2200;if(p.includes('large')||p.includes('enterprise'))return 1500;if(p.includes('business')||p.includes('medium'))return 850;if(p.includes('small')||p.includes('startup'))return 350;return 600;}
 // Bepaalt een leesbaar abonnementslabel op basis van het echte maandbedrag
 function bedragNaarPlan(b){if(b>=1500)return'Enterprise';if(b>=800)return'Business';if(b>=400)return'Pro';if(b>=150)return'Starter';return'Basic';}
+// 6-maands omzethistorie: stabiel rond het echte maandbedrag (lichte variatie), laatste = echt
+function trendFlat(b){const arr=[];for(let i=5;i>=0;i--){const v=1+((i%3)-1)*0.015;arr.push(Math.round(b*v*100)/100);}arr[5]=Math.round(b*100)/100;return arr;}
 // Simuleert het aantal supporttickets (deterministisch op basis van klantnummer + inactiviteit)
 // Inactievere klanten neigen naar meer tickets; stabiel tussen herladen.
 function simTickets(relId,act){
@@ -1506,21 +1508,39 @@ function pCSV(f){
         const bedrag=hasPrice?(parseFloat(String(row.price).replace(',','.'))||0):planBedrag(row.price_plan);
         // afgeleid abonnementslabel op basis van het bedrag (alleen ter weergave)
         const subLabel=hasPrice?bedragNaarPlan(bedrag):cleanPlan(row.price_plan);
-        // 6-maands historie (oudste → nieuwste). De laatste maand = huidige.
-        // Belangrijk: als een klant X dagen inactief is, kan die de recente maanden
-        // GEEN orders meer hebben geplaatst. We zetten de orders van die maanden op 0.
-        const maandenInactief=Math.floor(act/30); // hoeveel recente maanden zonder orders
-        const trend=(base,vary)=>{const arr=[];for(let i=5;i>=0;i--){const factor=1+(i*vary);arr.push(Math.max(0,Math.round(base*factor)));}return arr;};
-        // ORDERS: rond het totaal, recente inactieve maanden op 0
-        let orderHist=trend(orderCount>0?orderCount:0,0.04);
-        if(maandenInactief>0){
-          for(let i=0;i<Math.min(maandenInactief,6);i++){orderHist[5-i]=0;}
-        }else{
-          orderHist[orderHist.length-1]=orderCount; // recent actief → laatste = echte waarde
+        // ════ 6-maands ORDERTREND opbouwen (oudste → nieuwste; index 5 = huidige maand) ════
+        // order_count = TOTAAL aantal orders. We verdelen dit over de actieve maanden en
+        // zorgen dat maanden NA het inactief worden 0 (of een paar open orders) tonen.
+        const maandenInactief=Math.round(act/30); // 45d→2mnd, 56d→2mnd, realistischer dan floor
+        let orderHist=[0,0,0,0,0,0];
+        if(orderCount>0){
+          // aantal maanden waarin de klant nog actief was (van de laatste 6)
+          const actieveMaanden=Math.max(1,6-maandenInactief);
+          // gemiddeld per actieve maand, met lichte variatie (oplopend richting de actieve periode)
+          const gem=orderCount/Math.min(orderCount, actieveMaanden===0?1:actieveMaanden);
+          const perMaand=Math.max(1,Math.round(orderCount/ (actieveMaanden+ (maandenInactief>0?0.5:0)) ));
+          for(let i=0;i<actieveMaanden;i++){
+            // lichte variatie zodat het natuurlijk oogt
+            const v=1+((i%3)-1)*0.08;
+            orderHist[i]=Math.max(1,Math.round(perMaand*v));
+          }
+          // de inactieve recente maanden: 0, behalve max enkele 'open' orders die bleven hangen
+          for(let i=0;i<maandenInactief;i++){
+            const idx=5-i;
+            if(idx>=actieveMaanden){
+              // dichtstbij het inactief-moment: soms 1-4 open orders, daarna 0
+              orderHist[idx]= (i===0 && act<75) ? Math.min(4, Math.max(0, Math.round(perMaand*0.06))) : 0;
+            }
+          }
+          // corrigeer zodat de som ongeveer gelijk is aan order_count (verdeel rest over actieve maanden)
+          let som=orderHist.reduce((a,b)=>a+b,0);
+          if(som>0 && actieveMaanden>0){
+            const ratio=orderCount/som;
+            for(let i=0;i<actieveMaanden;i++)orderHist[i]=Math.max(1,Math.round(orderHist[i]*ratio));
+          }
         }
-        // OMZET (MRR): het abonnement loopt door, ook bij inactiviteit (klant betaalt nog).
-        // Daarom blijft het maandbedrag staan — dat is juist waarom de klant churn-risico is.
-        let bedragHist=trend(bedrag,0.02);bedragHist[bedragHist.length-1]=Math.round(bedrag*100)/100;
+        // OMZET (MRR): abonnement loopt door, ook bij inactiviteit (klant betaalt nog).
+        let bedragHist=trendFlat(bedrag);
         return {
           id:'K-'+String(row.relation_ID).padStart(4,'0'),
           branche:BRANCHE_MAP[row.company_branche]||row.company_branche||'Overig',
@@ -1842,7 +1862,57 @@ function openDetail(id){
   requestAnimationFrame(()=>{cdestroy('detail-chart');const ctx=document.getElementById('detail-chart');if(!ctx)return;charts['detail-chart']=new Chart(ctx,{type:'line',data:{labels:MO,datasets:[{label:'Orders',data:c.orders,borderColor:hex(risk.color),backgroundColor:hex(risk.color)+'18',fill:true,borderWidth:2.5,pointRadius:3.5,pointBackgroundColor:hex(risk.color),pointBorderColor:'#fff',pointBorderWidth:1.5,tension:0.4},{label:'Gem.',data:Array(6).fill(risk.avg),borderColor:hex('var(--ink4)'),borderDash:[5,4],borderWidth:1.5,pointRadius:0,fill:false}]},options:lineOpts()});});
 }
 function aiRes(t){return `<div style="background:var(--s2);border:1px solid var(--line);border-radius:var(--r);padding:16px"><div style="font-size:13.5px;line-height:1.7;white-space:pre-wrap">${t}</div><button class="btn btn-gh" id="copy-btn" onclick="copyAI()" style="width:100%;margin-top:12px">↗ Kopieer e-mail</button></div>`;}
-async function fetchAI(id){const c=CUSTOMERS.find(x=>x.id===id);document.getElementById('ai-area').innerHTML=`<div style="text-align:center;padding:24px;color:var(--ink3);font-size:13px;animation:pulse 1.2s infinite">Model genereert aanbeveling…</div>`;const p=`Je bent Customer Success adviseur bij Brincr (B2B software voor orderverwerking). Klant ${c.id} · risico ${c.risk.score}/100 (${c.risk.label}) · branche ${c.branche} · subscriptie ${c.sub} · orders nu ${c.risk.recent} (gem ${c.risk.avg}) · ${c.act} dagen inactief · koppeling ${c.kop?'actief':'NIET actief'}. Signalen: ${c.risk.flags.map(f=>f.m).join('; ')}. Schrijf een warme professionele e-mail (max 90 woorden), begin met "Beste [naam]," eindig met uitnodiging voor 15-min gesprek, sluit af met "Met vriendelijke groet,\\n[Naam]". Geen opsommingstekens.`;try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:p}]})});const d=await r.json();const t=d.content?.map(b=>b.text||'').join('')||'Geen aanbeveling.';aiCache[id]=t;document.getElementById('ai-area').innerHTML=aiRes(t);const st=document.getElementById('ai-st');if(st){st.textContent='● Gegenereerd';st.style.color='var(--green-d)';}}catch{document.getElementById('ai-area').innerHTML=`<div style="color:var(--crit);font-size:13px;padding:12px">Fout bij ophalen. Controleer verbinding.</div>`;}}
+async function fetchAI(id){
+  const c=CUSTOMERS.find(x=>x.id===id);if(!c)return;
+  document.getElementById('ai-area').innerHTML=`<div style="text-align:center;padding:24px;color:var(--ink3);font-size:13px;animation:pulse 1.2s infinite">Aanbeveling wordt opgesteld…</div>`;
+  // kleine vertraging zodat het natuurlijk aanvoelt
+  await new Promise(r=>setTimeout(r,450));
+  const t=genEmail(c);
+  aiCache[id]=t;
+  document.getElementById('ai-area').innerHTML=aiRes(t);
+  const st=document.getElementById('ai-st');if(st){st.textContent='● Gegenereerd';st.style.color='var(--green-d)';}
+  logAction('E-mailsuggestie gegenereerd',id);
+}
+// Slimme lokale e-mailgenerator op basis van het risicoprofiel van de klant
+function genEmail(c){
+  const r=c.risk;
+  // openingszin afhankelijk van het belangrijkste signaal
+  let kern='', actie='', toon='';
+  const flags=r.flags.map(f=>f.m.toLowerCase());
+  const heeftKoppeling=c.kop;
+  const langInactief=c.act>=50;
+  const matigInactief=c.act>=20&&c.act<50;
+  const ordersGedaald=r.recent<r.avg*0.7;
+  const veelTickets=(r.tickets||0)>=5;
+
+  // Kernboodschap kiezen
+  if(!heeftKoppeling){
+    kern=`We zagen dat jullie boekhouding nog niet aan Brincr is gekoppeld. Juist die koppeling bespaart veel handwerk en voorkomt fouten in de orderverwerking.`;
+    actie=`Ik help jullie graag in een kort gesprek de koppeling in te richten.`;
+  }else if(langInactief){
+    kern=`Het is ons opgevallen dat jullie Brincr de afgelopen ${c.act} dagen niet hebben gebruikt. We willen graag begrijpen wat er speelt en hoe we kunnen helpen.`;
+    actie=`Ik denk graag met jullie mee over hoe Brincr weer waarde voor jullie kan toevoegen.`;
+  }else if(ordersGedaald){
+    kern=`We zien dat het aantal orders via Brincr de laatste tijd is teruggelopen, van gemiddeld ${r.avg} naar ${r.recent} per maand. Dat willen we graag samen omdraaien.`;
+    actie=`In een kort gesprek kijken we wat er speelt en hoe we jullie beter kunnen ondersteunen.`;
+  }else if(veelTickets){
+    kern=`We zagen dat jullie recent meerdere supportvragen hadden. Dat horen we serieus op te pakken, want jullie ervaring met Brincr staat voorop.`;
+    actie=`Ik bespreek graag persoonlijk hoe we de openstaande punten kunnen oplossen.`;
+  }else if(matigInactief){
+    kern=`We merken dat het gebruik van Brincr wat is afgenomen. We horen graag of alles naar wens verloopt.`;
+    actie=`Een kort gesprek helpt ons jullie nog beter van dienst te zijn.`;
+  }else{
+    kern=`We willen graag even contact houden en horen hoe het gebruik van Brincr jullie bevalt.`;
+    actie=`Ik plan graag een kort moment in om mee te denken over jullie wensen.`;
+  }
+  // toon afhankelijk van risiconiveau
+  if(r.label==='Kritiek')toon='Omdat we jullie als gewaardeerde klant willen behouden, neem ik graag op korte termijn contact op.';
+  else if(r.label==='Hoog')toon='We zetten graag een stap extra om jullie goed van dienst te blijven.';
+  else toon='We denken graag proactief met jullie mee.';
+
+  const naam=ME?ME.name:'Customer Success-team';
+  return `Beste relatie,\n\n${kern} ${toon}\n\n${actie} Zou een kort gesprek van 15 minuten deze of volgende week schikken? Laat gerust weten wat jullie het beste uitkomt.\n\nMet vriendelijke groet,\n${naam}\nCustomer Success · Brincr`;
+}
 function copyAI(){const el=document.querySelector('#ai-area div div');if(!el)return;navigator.clipboard.writeText(el.textContent);const b=document.getElementById('copy-btn');if(b){b.textContent='✓ Gekopieerd';setTimeout(()=>b.textContent='↗ Kopieer e-mail',2000);}}
 function closeDetail(e){if(e&&e.target!==document.getElementById('detail-ov'))return;document.getElementById('detail-ov').classList.remove('open');document.body.style.overflow='';cdestroy('detail-chart');}
 
