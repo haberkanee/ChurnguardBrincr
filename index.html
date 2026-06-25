@@ -662,6 +662,16 @@ function mapUser(row){
     perms:["dashboard","klanten","alerts","audit","import","export","risico"]
   };
 }
+// Centrale check voor Teamlead-/beheerderrechten.
+// Teamlead is iedereen met 'Teamlead' in de rol, of de beheerder (Hamza Aberkane).
+const ADMIN_EMAILS=["hamza.aberkane@visma.com","h.aberkanee@gmail.com"];
+function isTeamlead(){
+  if(!ME)return false;
+  if(ME.role&&ME.role.includes('Teamlead'))return true;
+  if(ME.email&&ADMIN_EMAILS.includes(ME.email.toLowerCase()))return true;
+  if(ME.name&&ME.name.toLowerCase().includes('hamza aberkane'))return true;
+  return false;
+}
 const AVATAR_COLORS=["#247a59","#2f9e74","#5cb89a","#1f7a4d","#3d9b7a"];
 const MAX_ATTEMPTS=5, LOCKOUT_MS=30000, SESSION_MS=30*60*1000;
 let ME=null, failCount=0, lockUntil=0, sessionTimer=null, lastActivity=Date.now(), authMode='login';
@@ -1230,7 +1240,7 @@ function renderAlerts(){
 
 // AUDIT
 function renderAudit(){
-  const isLead=ME&&ME.role&&ME.role.includes('Teamlead');
+  const isLead=isTeamlead();
   // bepaal de lijst gebruikers voor het filter (geregistreerde app-gebruikers)
   const namen=[...new Set([...ALL_USERS.map(u=>u.naam),...AUDIT.map(a=>a.who).filter(Boolean)])].sort();
   // filter de log-items op de gekozen gebruiker
@@ -1293,7 +1303,7 @@ const WEIGHT_INFO=[
   {k:'onboarding',label:'Onboarding niet voltooid',oms:'De klant heeft de onboarding niet afgerond.',max:30},
 ];
 function renderRisico(){
-  const isLead=ME&&ME.role&&ME.role.includes('Teamlead');
+  const isLead=isTeamlead();
   const totaalGewicht=Object.values(WEIGHTS).reduce((a,b)=>a+b,0);
   const slider=(w)=>`
     <div style="padding:15px 0;border-bottom:1px solid var(--line)">
