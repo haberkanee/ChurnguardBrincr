@@ -308,7 +308,7 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
         <div style="margin-bottom:13px">
           <label style="display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px">Wachtwoord</label>
           <div style="position:relative">
-            <input type="text" id="login-pw" autocomplete="off" placeholder="Je wachtwoord" class="auth-in" style="padding-right:42px"/>
+            <input type="password" id="login-pw" autocomplete="current-password" placeholder="Je wachtwoord" class="auth-in" style="padding-right:42px"/>
             <button type="button" onclick="togglePw('login-pw')" class="pw-eye"><svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M1.5 9S4.5 3.5 9 3.5 16.5 9 16.5 9 13.5 14.5 9 14.5 1.5 9 1.5 9z" stroke="currentColor" stroke-width="1.4"/><circle cx="9" cy="9" r="2.3" stroke="currentColor" stroke-width="1.4"/></svg></button>
           </div>
         </div>
@@ -334,14 +334,14 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
         <div style="margin-bottom:13px">
           <label style="display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px">Wachtwoord</label>
           <div style="position:relative">
-            <input type="text" id="reg-pw" autocomplete="off" placeholder="Minimaal 8 tekens" class="auth-in" style="padding-right:42px" oninput="checkPwStrength()"/>
+            <input type="password" id="reg-pw" autocomplete="new-password" placeholder="Minimaal 8 tekens" class="auth-in" style="padding-right:42px" oninput="checkPwStrength()"/>
             <button type="button" onclick="togglePw('reg-pw')" class="pw-eye"><svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M1.5 9S4.5 3.5 9 3.5 16.5 9 16.5 9 13.5 14.5 9 14.5 1.5 9 1.5 9z" stroke="currentColor" stroke-width="1.4"/><circle cx="9" cy="9" r="2.3" stroke="currentColor" stroke-width="1.4"/></svg></button>
           </div>
           <div id="pw-strength" style="display:none;margin-top:7px"><div style="height:4px;background:var(--s3);border-radius:99px;overflow:hidden"><div id="pw-bar" style="height:100%;width:0;border-radius:99px;transition:all 0.3s"></div></div><span id="pw-label" style="font-size:11px;font-family:var(--mono);margin-top:3px;display:inline-block"></span></div>
         </div>
         <div style="margin-bottom:16px">
           <label style="display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px">Bevestig wachtwoord</label>
-          <input type="text" id="reg-pw2" autocomplete="off" placeholder="Herhaal je wachtwoord" class="auth-in"/>
+          <input type="password" id="reg-pw2" autocomplete="new-password" placeholder="Herhaal je wachtwoord" class="auth-in"/>
         </div>
         <button type="submit" class="btn btn-pri" style="width:100%;padding:12px">Account aanmaken</button>
         <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink3)">Al een account? <button type="button" onclick="switchAuth('login')" style="color:var(--green-d);font-weight:600">Log in</button></div>
@@ -904,7 +904,8 @@ async function doLogin(ev){
   failCount=0;ME=mapUser(row);
   // werk laatste_login bij in de database
   try{ await sb.from('gebruikers').update({laatste_login:new Date().toISOString()}).eq('gebruiker_id',row.gebruiker_id); }catch(e){}
-  saveSession(row.gebruiker_id);  // onthoud wie is ingelogd (overleeft verversen)
+  const remember=!!(document.getElementById('login-remember')&&document.getElementById('login-remember').checked);
+  saveSession(row.gebruiker_id,remember);  // onthoud wie is ingelogd (overleeft verversen)
   document.getElementById('login-error').style.display='none';
   document.getElementById('login-success').style.display='none';
   await enterApp(true);
@@ -913,7 +914,8 @@ async function doLogin(ev){
 }
 // Bewaart / herstelt de actieve sessie zodat verversen niet uitlogt
 const SESSION_KEY='churnguard_session';
-function saveSession(userId){try{localStorage.setItem(SESSION_KEY,JSON.stringify({id:userId,t:Date.now()}));}catch(e){}}
+const REMEMBER_MS=30*24*60*60*1000; // 30 dagen bij "aangemeld blijven"
+function saveSession(userId,remember){try{localStorage.setItem(SESSION_KEY,JSON.stringify({id:userId,t:Date.now(),r:!!remember}));}catch(e){}}
 function clearSession(){try{localStorage.removeItem(SESSION_KEY);}catch(e){}}
 // Toont de app-shell voor de huidige ME en laadt de data
 async function enterApp(loadData){
@@ -937,13 +939,14 @@ async function restoreSession(){
   if(!sb)return false;
   let s=null;try{s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch(e){}
   if(!s||!s.id)return false;
-  // sessie ouder dan 30 min? dan niet herstellen
-  if(Date.now()-s.t>SESSION_MS){clearSession();return false;}
+  // "aangemeld blijven" → 30 dagen geldig; anders 30 minuten
+  const maxAge=s.r?REMEMBER_MS:SESSION_MS;
+  if(Date.now()-s.t>maxAge){clearSession();return false;}
   try{
     const {data}=await sb.from('gebruikers').select('*').eq('gebruiker_id',s.id).maybeSingle();
     if(!data)return false;
     ME=mapUser(data);
-    saveSession(s.id); // ververs tijdstempel
+    saveSession(s.id,s.r); // ververs tijdstempel, behoud remember-vlag
     await enterApp(true);
     return true;
   }catch(e){console.error('Sessie herstellen mislukt:',e);return false;}
@@ -1071,7 +1074,11 @@ async function changePassword(){
 function startSession(){
   lastActivity=Date.now();
   clearInterval(sessionTimer);
-  sessionTimer=setInterval(()=>{if(Date.now()-lastActivity>SESSION_MS)logout('timeout');},10000);
+  // Bij "aangemeld blijven" geen automatische uitlog wegens inactiviteit
+  let remembered=false;try{const s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');remembered=!!(s&&s.r);}catch(e){}
+  if(!remembered){
+    sessionTimer=setInterval(()=>{if(Date.now()-lastActivity>SESSION_MS)logout('timeout');},10000);
+  }
   ['click','keydown','mousemove','touchstart'].forEach(e=>document.addEventListener(e,()=>{lastActivity=Date.now();},{passive:true}));
 }
 function logAction(act,who){
