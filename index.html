@@ -410,7 +410,7 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
       <div class="tb-tw"><span class="tb-title" id="tb-title">Dashboard</span></div>
       <div class="tb-search">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="var(--ink4)" stroke-width="1.6"/><path d="M11 11l3 3" stroke="var(--ink4)" stroke-width="1.6" stroke-linecap="round"/></svg>
-        <input type="text" id="gsearch" placeholder="Zoek klantcode…" oninput="gSearch(this.value)"/>
+        <input type="text" id="gsearch" placeholder="Zoek klantcode…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="klantcode-zoeken" oninput="gSearch(this.value)"/>
         <span class="kbd">⌘K</span>
       </div>
       <button class="tb-btn" title="Vernieuwen" onclick="render()"><svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M15 9a6 6 0 10-1.8 4.3M15 14v-4h-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -1047,6 +1047,11 @@ async function saveProfile(){
   const functie=document.getElementById('pf-functie').value;
   if(!name||name.split(/\s+/).length<2){profileMsg('Vul je voor- en achternaam in.','error');return;}
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){profileMsg('Voer een geldig e-mailadres in.','error');return;}
+  // De Teamlead-functie kun je niet zelf kiezen — die wordt toegewezen.
+  if(functie.includes('Teamlead')&&!isTeamlead()){
+    profileMsg('Goed geprobeerd 😄 — de functie Teamlead kies je niet zelf, die verdien je. Neem contact op met je huidige teamlead om bevorderd te worden.','error');
+    return;
+  }
   if(!sb){profileMsg('Geen databaseverbinding.','error');return;}
   try{
     // controleer of e-mail al door iemand anders gebruikt wordt
@@ -1156,6 +1161,8 @@ function render(){hideDistPop();const m=document.getElementById('main');({dashbo
 function renderDash(){
   const kritiek=CUSTOMERS.filter(c=>c.risk.label==="Kritiek"),hoog=CUSTOMERS.filter(c=>c.risk.label==="Hoog");
   const top5=CUSTOMERS.slice(0,5),mrr=mrrAtRisk(),tmrr=totalMRR();
+  const lead=isTeamlead(); // alleen teamlead/beheerder mag de cijfers/churn aanpassen
+  const dots3=`<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg>`;
   const GO=t=>`go(&quot;${t}&quot;)`;
   const stat=(ic,bg,col,l,v,f,variant,oc)=>{
     const vs=variant==='crit'?'border-color:var(--crit);box-shadow:0 0 0 1px var(--crit),var(--sh-xs);':'';
@@ -1209,13 +1216,13 @@ function renderDash(){
       ${stat(IC.users,'var(--green-soft)','var(--green-d)','Actieve klanten',CUSTOMERS.length,'Totaal in portfolio','',GO('klanten'))}
     </div>
     <div class="g3" style="margin-bottom:16px">
-      <div class="card"><div class="card-head"><div><div class="card-title">Churn trend</div><div class="card-sub">${CHURN_HIST.reduce((a,b)=>a+b.c,0)} klanten · 12 mnd</div></div><button class="act-btn" title="Cijfers aanpassen" onclick="openTrendEditor('churn')"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg></button></div><div class="card-body"><div class="chart-b"><canvas id="churn-chart"></canvas></div></div></div>
-      <div class="card"><div class="card-head"><div><div class="card-title">Risicoklanten / maand</div><div class="card-sub">Hoog + kritiek niveau</div></div><button class="act-btn" title="Cijfers aanpassen" onclick="openTrendEditor('risk')"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg></button></div><div class="card-body"><div class="chart-b"><canvas id="risk-chart"></canvas></div></div></div>
+      <div class="card"><div class="card-head"><div><div class="card-title">Churn trend</div><div class="card-sub">${CHURN_HIST.reduce((a,b)=>a+b.c,0)} klanten · 12 mnd</div></div>${lead?`<button class="act-btn" title="Cijfers aanpassen" onclick="openTrendEditor('churn')">${dots3}</button>`:''}</div><div class="card-body"><div class="chart-b"><canvas id="churn-chart"></canvas></div></div></div>
+      <div class="card"><div class="card-head"><div><div class="card-title">Risicoklanten / maand</div><div class="card-sub">Hoog + kritiek niveau</div></div>${lead?`<button class="act-btn" title="Cijfers aanpassen" onclick="openTrendEditor('risk')">${dots3}</button>`:''}</div><div class="card-body"><div class="chart-b"><canvas id="risk-chart"></canvas></div></div></div>
       <div class="card"><div class="card-head"><div><div class="card-title">Recente activiteit</div><div class="card-sub">Team-acties</div></div><button class="btn btn-gh" style="padding:5px 11px;font-size:11.5px" onclick="go('audit')">Alles</button></div><div class="card-body" style="padding-top:8px;padding-bottom:8px">${AUDIT.slice(0,4).map(a=>`<div class="tl-item" style="padding:8px 0"><div class="tl-dot" style="width:28px;height:28px">${IC[a.i]}</div><div style="flex:1;min-width:0"><div style="font-size:12.5px;line-height:1.4">${a.act}</div><div style="font-size:11px;color:var(--ink3);margin-top:1px"><span style="font-family:var(--mono)">${a.tgt}</span> · ${a.t}</div></div></div>`).join('')}</div></div>
     </div>
     <div class="card">
-      <div class="card-head"><div><div class="card-title">Gechurnd deze maand</div><div class="card-sub">${CHURNED.length} klanten · ${H.eur(CHURNED.reduce((s,c)=>s+c.mrr,0))} MRR verloren</div></div><div style="display:flex;align-items:center;gap:6px"><button class="btn btn-gh" style="padding:6px 12px;font-size:12px" onclick="showChurn()">Details</button><button class="act-btn" title="Klant als gechurnd markeren" onclick="openChurnPicker()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg></button></div></div>
-      ${CHURNED.map(c=>`<div class="lrow" style="cursor:default"><span class="cid">${c.id}</span><span class="tag">${c.branche}</span><span class="cmeta" style="flex:1">${c.reden}</span><span style="font-family:var(--mono);font-size:12px;color:var(--crit);font-weight:600">−${H.eur(c.mrr)}</span><button class="act-btn" title="Verwijder uit gechurnd" onclick="unchurn('${c.id}')" style="margin-left:8px"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>`).join('')}
+      <div class="card-head"><div><div class="card-title">Gechurnd deze maand</div><div class="card-sub">${CHURNED.length} klanten · ${H.eur(CHURNED.reduce((s,c)=>s+c.mrr,0))} MRR verloren</div></div><div style="display:flex;align-items:center;gap:6px"><button class="btn btn-gh" style="padding:6px 12px;font-size:12px" onclick="showChurn()">Details</button>${lead?`<button class="act-btn" title="Klant als gechurnd markeren" onclick="openChurnPicker()">${dots3}</button>`:''}</div></div>
+      ${CHURNED.map(c=>`<div class="lrow" style="cursor:default"><span class="cid">${c.id}</span><span class="tag">${c.branche}</span><span class="cmeta" style="flex:1">${c.reden}</span><span style="font-family:var(--mono);font-size:12px;color:var(--crit);font-weight:600">−${H.eur(c.mrr)}</span>${lead?`<button class="act-btn" title="Verwijder uit gechurnd" onclick="unchurn('${c.id}')" style="margin-left:8px"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`:''}</div>`).join('')}
     </div>
   </div>`;
 }
@@ -1232,7 +1239,7 @@ function renderKlanten(){
   return `<div class="page">
     <div class="page-head"><h1 class="page-h1">Klanten</h1><p class="page-desc">Volledig overzicht van alle actieve klanten en hun risicoprofiel.</p></div>
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-      <label class="filt"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="var(--ink4)" stroke-width="1.6"/><path d="M11 11l3 3" stroke="var(--ink4)" stroke-width="1.6" stroke-linecap="round"/></svg><input type="text" placeholder="Zoek klantcode" value="${kf.search}" style="border:none;background:none;width:120px" oninput="kf.search=this.value;document.getElementById('main').innerHTML=renderKlanten()"/></label>
+      <label class="filt"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="var(--ink4)" stroke-width="1.6"/><path d="M11 11l3 3" stroke="var(--ink4)" stroke-width="1.6" stroke-linecap="round"/></svg><input type="text" placeholder="Zoek klantcode" autocomplete="off" value="${kf.search}" style="border:none;background:none;width:120px" oninput="kf.search=this.value;document.getElementById('main').innerHTML=renderKlanten()"/></label>
       <label class="filt">Branche: <select onchange="kf.branche=this.value;document.getElementById('main').innerHTML=renderKlanten()">${branches.map(b=>`<option${b===kf.branche?' selected':''}>${b}</option>`).join('')}</select></label>
       <label class="filt"${kf.status!=='Alle'?' style="border-color:var(--green-l);color:var(--green-d)"':''}>Status: <select onchange="kf.status=this.value;document.getElementById('main').innerHTML=renderKlanten()">${['Alle','Kritiek','Hoog','Middel','Laag','Gechurnd'].map(s=>`<option${s===kf.status?' selected':''}>${s}</option>`).join('')}</select></label>
       <div class="seg" style="margin-left:auto">${[['score','Score'],['orders','Orders'],['act','Inactief']].map(([k,l])=>`<button class="seg-b ${kf.sort===k?'active':''}" onclick="kf.sort='${k}';document.getElementById('main').innerHTML=renderKlanten()">${l}</button>`).join('')}</div>
@@ -1919,7 +1926,7 @@ function renderChurnPicker(){
     <div style="padding:16px 21px 21px">
       <div style="position:relative;margin-bottom:14px">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="position:absolute;left:13px;top:50%;transform:translateY(-50%)"><circle cx="7" cy="7" r="4.5" stroke="var(--ink4)" stroke-width="1.6"/><path d="M11 11l3 3" stroke="var(--ink4)" stroke-width="1.6" stroke-linecap="round"/></svg>
-        <input type="text" id="churnpick-search" value="${churnPickSearch.replace(/"/g,'&quot;')}" oninput="churnPickSearch=this.value;renderChurnPickerList()" placeholder="Zoek op klantcode of branche…" class="auth-in" style="padding-left:38px"/>
+        <input type="text" id="churnpick-search" autocomplete="off" value="${churnPickSearch.replace(/"/g,'&quot;')}" oninput="churnPickSearch=this.value;renderChurnPickerList()" placeholder="Zoek op klantcode of branche…" class="auth-in" style="padding-left:38px"/>
       </div>
       <div id="churnpick-list" style="max-height:50vh;overflow-y:auto">${rows}</div>
     </div>`;
