@@ -469,8 +469,19 @@ const DEFAULT_THRESHOLDS={kritiek:75,hoog:50,middel:25};
 let THRESHOLDS={...DEFAULT_THRESHOLDS};
 
 function calcRisk(c){
-  const recent=c.orders[c.orders.length-1],avg4=c.orders.slice(0,4).reduce((a,b)=>a+b,0)/4;
-  const drop=avg4>0?(avg4-recent)/avg4:1;
+  // Orderdaling realistisch berekenen: kijk alleen naar de maanden waarin de klant
+  // nog actief was (de laatste maanden staan op 0 door inactiviteit — die negeren we,
+  // anders krijg je een onrealistische "−100%").
+  const maandenInactief=Math.round((c.act||0)/30);
+  const actieveOrders=maandenInactief>0?c.orders.slice(0,Math.max(1,6-maandenInactief)):c.orders;
+  const recent=actieveOrders[actieveOrders.length-1];                 // laatste ACTIEVE maand
+  const eerder=actieveOrders.slice(0,Math.max(1,actieveOrders.length-1));
+  const avgEerder=eerder.length?eerder.reduce((a,b)=>a+b,0)/eerder.length:recent;
+  // daling binnen de actieve periode (echte gedragsverandering, niet de inactiviteit)
+  const drop=avgEerder>0?Math.max(0,(avgEerder-recent)/avgEerder):0;
+  // voor weergave elders (KPI/grafiek) gebruiken we nog de echte laatste maand en het 4-mnd gemiddelde
+  const avg4=c.orders.slice(0,4).reduce((a,b)=>a+b,0)/4;
+  const displayRecent=c.orders[c.orders.length-1];
   const rb=c.bedrag[c.bedrag.length-1],ab=c.bedrag.slice(0,4).reduce((a,b)=>a+b,0)/4,bdrop=ab>0?(ab-rb)/ab:0;
   let score=0,flags=[];
 
@@ -494,9 +505,9 @@ function calcRisk(c){
 
   // 3) Support tickets — (tijdelijk uitgeschakeld)
 
-  // 4) Orders gedaald — >50% vol, >30% half
-  if(drop>=0.5){score+=WEIGHTS.ordersdaling;flags.push({t:"crit",m:`Orders −${Math.round(drop*100)}% t.o.v. gemiddelde`,i:"down"});}
-  else if(drop>=0.3){score+=Math.round(WEIGHTS.ordersdaling*0.5);flags.push({t:"warn",m:`Orders −${Math.round(drop*100)}% t.o.v. gemiddelde`,i:"down"});}
+  // 4) Orders gedaald — alleen op basis van de ACTIEVE maanden (geen schijn-100%)
+  if(drop>=0.5){score+=WEIGHTS.ordersdaling;flags.push({t:"crit",m:`Orders −${Math.round(drop*100)}% in actieve periode`,i:"down"});}
+  else if(drop>=0.3){score+=Math.round(WEIGHTS.ordersdaling*0.5);flags.push({t:"warn",m:`Orders −${Math.round(drop*100)}% in actieve periode`,i:"down"});}
 
   // 5) Omzetdaling ≥30%
   if(bdrop>=0.3){score+=WEIGHTS.omzetdaling;flags.push({t:"warn",m:`Omzet €${Math.round(ab)} → €${Math.round(rb)}`,i:"euro"});}
@@ -516,7 +527,7 @@ function calcRisk(c){
   else if(score>=THRESHOLDS.hoog){label="Hoog";color="var(--high)";soft="b-high";}
   else if(score>=THRESHOLDS.middel){label="Middel";color="var(--med)";soft="b-med";}
   else{label="Laag";color="var(--low)";soft="b-low";}
-  return {score,label,color,soft,flags,recent,avg:Math.round(avg4),rb,ab:Math.round(ab),bdrop};
+  return {score,label,color,soft,flags,recent:displayRecent,avg:Math.round(avg4),rb,ab:Math.round(ab),bdrop,activeRecent:recent};
 }
 let CUSTOMERS=RAW.map(c=>({...c,risk:calcRisk(c)})).sort((a,b)=>b.risk.score-a.risk.score);
 let URGENT=CUSTOMERS.filter(c=>["Kritiek","Hoog"].includes(c.risk.label));
