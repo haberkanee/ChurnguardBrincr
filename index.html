@@ -666,12 +666,18 @@ async function dbEmailExists(email){
 }
 // Maakt het mapping-object dat de app intern gebruikt vanuit een database-rij
 function mapUser(row){
+  const role=row.rol||'';
+  const email=(row.email||'').toLowerCase();
+  const naam=(row.naam||'').toLowerCase();
+  // Teamlead/beheerder krijgt de beheer-tabs (import, export, risico-instellingen)
+  const lead = role.includes('Teamlead') || ADMIN_EMAILS.includes(email) || naam.includes('hamza aberkane');
+  const basis=["dashboard","klanten","alerts","audit"];
+  const beheer=["import","export","risico"];
   return {
     id:row.gebruiker_id, email:row.email, name:row.naam, pw:row.wachtwoord,
     role:row.rol, functie:row.functie||row.rol||'Medewerker', geverifieerd:row.geverifieerd,
     av:initials(row.naam), color:AVATAR_COLORS[(row.gebruiker_id||0)%AVATAR_COLORS.length],
-    // Voorlopig krijgt iedereen dezelfde (volledige) rechten
-    perms:["dashboard","klanten","alerts","audit","import","export","risico"]
+    perms: lead ? [...basis,...beheer] : basis
   };
 }
 // Centrale check voor Teamlead-/beheerderrechten.
