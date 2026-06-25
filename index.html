@@ -432,6 +432,7 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
 <div class="ov" id="action-ov" onclick="closeActionModal(event)"><div class="sheet sheet-sm" id="action-sheet"></div></div>
 <div class="ov" id="profile-ov" onclick="closeProfile(event)"><div class="sheet sheet-sm" id="profile-sheet"></div></div>
 <div class="ov" id="churnpick-ov" onclick="closeChurnPicker(event)"><div class="sheet sheet-sm" id="churnpick-sheet"></div></div>
+<div class="ov" id="mrr-ov" onclick="closeMrrList(event)"><div class="sheet" id="mrr-sheet"></div></div>
 <script>
 // DATA
 const RAW=[
@@ -471,7 +472,6 @@ function calcRisk(c){
   const recent=c.orders[c.orders.length-1],avg4=c.orders.slice(0,4).reduce((a,b)=>a+b,0)/4;
   const drop=avg4>0?(avg4-recent)/avg4:1;
   const rb=c.bedrag[c.bedrag.length-1],ab=c.bedrag.slice(0,4).reduce((a,b)=>a+b,0)/4,bdrop=ab>0?(ab-rb)/ab:0;
-  const tickets=c.tickets||0;
   let score=0,flags=[];
 
   // 1) Geen boekhoudkoppeling — vol gewicht
@@ -492,13 +492,7 @@ function calcRisk(c){
     }
   }
 
-  // 3) Support tickets — vanaf 3, vol gewicht bij 7+
-  if(tickets>=3){
-    const f=Math.min(1,(tickets-2)/5); // 3=20%, 7+=100%
-    const add=Math.round(WEIGHTS.tickets*f);
-    score+=add;
-    flags.push({t:tickets>=7?"crit":"warn",m:`${tickets} supporttickets deze maand`,i:"ticket"});
-  }
+  // 3) Support tickets — (tijdelijk uitgeschakeld)
 
   // 4) Orders gedaald — >50% vol, >30% half
   if(drop>=0.5){score+=WEIGHTS.ordersdaling;flags.push({t:"crit",m:`Orders −${Math.round(drop*100)}% t.o.v. gemiddelde`,i:"down"});}
@@ -522,7 +516,7 @@ function calcRisk(c){
   else if(score>=THRESHOLDS.hoog){label="Hoog";color="var(--high)";soft="b-high";}
   else if(score>=THRESHOLDS.middel){label="Middel";color="var(--med)";soft="b-med";}
   else{label="Laag";color="var(--low)";soft="b-low";}
-  return {score,label,color,soft,flags,recent,avg:Math.round(avg4),rb,ab:Math.round(ab),bdrop,tickets};
+  return {score,label,color,soft,flags,recent,avg:Math.round(avg4),rb,ab:Math.round(ab),bdrop};
 }
 let CUSTOMERS=RAW.map(c=>({...c,risk:calcRisk(c)})).sort((a,b)=>b.risk.score-a.risk.score);
 let URGENT=CUSTOMERS.filter(c=>["Kritiek","Hoog"].includes(c.risk.label));
@@ -534,6 +528,28 @@ function rebuildCustomers(rawArr){
 }
 const CHURN_HIST=[{m:"Jul",c:4,r:9},{m:"Aug",c:3,r:8},{m:"Sep",c:2,r:7},{m:"Okt",c:5,r:13},{m:"Nov",c:2,r:7},{m:"Dec",c:3,r:9},{m:"Jan",c:3,r:8},{m:"Feb",c:2,r:7},{m:"Mrt",c:4,r:10},{m:"Apr",c:2,r:9},{m:"Mei",c:5,r:12},{m:"Jun",c:3,r:11}];
 const HEALTH_HIST=[72,71,73,69,68,70,71,67,66,68,64,63];
+// Berekent de gemiddelde gezondheidsscore van de portefeuille (0-100).
+// Veel kritieke/hoge klanten → lage score; weinig → hoge score.
+// Werkt met een gewogen aftrek per risiconiveau t.o.v. een gezonde basis van 100.
+function healthScore(){
+  const list=CUSTOMERS;
+  if(!list.length)return 100;
+  const n=list.length;
+  const kritiek=list.filter(c=>c.risk.label==='Kritiek').length;
+  const hoog=list.filter(c=>c.risk.label==='Hoog').length;
+  const middel=list.filter(c=>c.risk.label==='Middel').length;
+  // elke kritieke klant trekt het meest af, hoog minder, middel licht
+  const aftrek=(kritiek*1.0 + hoog*0.6 + middel*0.25)/n*100;
+  return Math.max(0,Math.min(100,Math.round(100-aftrek)));
+}
+// Tekstlabel onder de score afhankelijk van de waarde
+function healthLabel(){
+  const s=healthScore();
+  if(s>=75)return 'Gezonde portefeuille';
+  if(s>=55)return 'Redelijk gezond';
+  if(s>=40)return 'Aandacht nodig';
+  return 'Kwetsbare portefeuille';
+}
 let CHURNED=[{id:"K-0011",branche:"Retail",reden:"Geen koppeling + langdurig inactief",mrr:340},{id:"K-0028",branche:"Logistiek",reden:"Orders >60% gedaald over 3 maanden",mrr:520},{id:"K-0039",branche:"Zorg",reden:"Abonnement gedowngraded, daarna opgezegd",mrr:180}];
 // Activiteitenlog en notities komen uit de Supabase-database.
 let AUDIT=[];                 // [{act,tgt,t,i}]
@@ -569,8 +585,7 @@ async function loadAllData(){
         id:r.klantcode, branche:r.branche||'Overig', sub:r.subscriptie||'Onbekend',
         orders:r.orders_historie||[0,0,0,0,0,r.aantal_orders||0],
         bedrag:r.bedrag_historie||[r.maandbedrag||0,r.maandbedrag||0,r.maandbedrag||0,r.maandbedrag||0,r.maandbedrag||0,r.maandbedrag||0],
-        act:r.dagen_inactief||0, kop:!!r.boekhoudkoppeling, partner:!!r.partner, onb:r.onboarding_voltooid!==false,
-        tickets:(r.tickets!=null?r.tickets:simTickets(r.klantcode.replace(/\D/g,''),r.dagen_inactief||0))
+        act:r.dagen_inactief||0, kop:!!r.boekhoudkoppeling, partner:!!r.partner, onb:r.onboarding_voltooid!==false
       }));
       rebuildCustomers(arr);
     }else{
@@ -581,10 +596,15 @@ async function loadAllData(){
     const {data:ac}=await sb.from('acties').select('*').order('aangemaakt_op',{ascending:false});
     if(ac){ac.forEach(r=>{if(!CLIENT_NOTES[r.klantcode])CLIENT_NOTES[r.klantcode]=[];CLIENT_NOTES[r.klantcode].push({type:r.type,label:r.label,icon:r.icon,text:r.tekst,by:r.gebruiker_naam,ts:new Date(r.aangemaakt_op).getTime()});});}
     // ACTIVITEITENLOG
-    const {data:lg}=await sb.from('activiteitenlog').select('*').order('aangemaakt_op',{ascending:false}).limit(50);
+    const {data:lg}=await sb.from('activiteitenlog').select('*').order('aangemaakt_op',{ascending:false}).limit(200);
     if(lg)AUDIT=lg.map(r=>({act:r.actie,tgt:r.doelwit,who:r.gebruiker_naam,i:r.icon||'note',t:relTime(r.aangemaakt_op)}));
+    // GEREGISTREERDE GEBRUIKERS (voor het filter in het activiteitenlog)
+    const {data:us}=await sb.from('gebruikers').select('naam,email,rol,functie').order('naam',{ascending:true});
+    if(us)ALL_USERS=us.map(u=>({naam:u.naam,email:u.email,rol:u.rol,functie:u.functie}));
   }catch(e){console.error('Data laden mislukt:',e);}
 }
+let ALL_USERS=[];
+let auditFilter='alle'; // 'alle' of een gebruikersnaam
 const CSSVAR=(()=>{const s=getComputedStyle(document.documentElement);return v=>s.getPropertyValue(v.replace(/var\(|\)/g,'').trim()).trim();})();
 function hex(c){return c&&c.startsWith('var(')?CSSVAR(c):c;}
 ['sb-badge','mb-badge'].forEach(id=>{const e=document.getElementById(id);if(e){e.textContent=URGENT.length;if(!URGENT.length)e.style.display='none';}});
@@ -1137,9 +1157,9 @@ function renderDash(){
 
     <!-- KPI STAT CARDS -->
     <div class="g4 stagger" style="margin-bottom:16px">
-      ${stat(IC.euro2,'var(--crit-soft)','var(--crit)','MRR-at-risk','<span class="unit">€</span>'+mrr.toLocaleString('nl-NL'),'',' ',null)}
+      ${stat(IC.euro2,'var(--crit-soft)','var(--crit)','MRR-at-risk','<span class="unit">€</span>'+mrr.toLocaleString('nl-NL'),'Bekijk klanten →',' ','showMrrList()')}
       ${stat(IC.alert,'var(--crit)','#fff','Kritiek risico',kritiek.length,'Directe actie binnen 48u →','crit',GO('alerts'))}
-      ${stat(IC.heart,'var(--green-soft)','var(--green-d)','Gem. health score',HEALTH_HIST[HEALTH_HIST.length-1],'−9 punten over 12 mnd','',null)}
+      ${stat(IC.heart,'var(--green-soft)','var(--green-d)','Gem. health score',healthScore(),healthLabel(),'',null)}
       ${stat(IC.users,'var(--green-soft)','var(--green-d)','Actieve klanten',CUSTOMERS.length,'Totaal in portfolio','',GO('klanten'))}
     </div>
     <div class="g3" style="margin-bottom:16px">
@@ -1210,10 +1230,31 @@ function renderAlerts(){
 
 // AUDIT
 function renderAudit(){
+  const isLead=ME&&ME.role&&ME.role.includes('Teamlead');
+  // bepaal de lijst gebruikers voor het filter (geregistreerde app-gebruikers)
+  const namen=[...new Set([...ALL_USERS.map(u=>u.naam),...AUDIT.map(a=>a.who).filter(Boolean)])].sort();
+  // filter de log-items op de gekozen gebruiker
+  const items=auditFilter==='alle'?AUDIT:AUDIT.filter(a=>a.who===auditFilter);
+  const filterBar=isLead?`
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-body" style="display:flex;align-items:center;gap:13px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="none" style="color:var(--ink3)"><path d="M2.5 4.5h13M5 9h8M7 13.5h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span style="font-size:13px;font-weight:600;color:var(--ink2)">Filter op gebruiker</span>
+        </div>
+        <select onchange="auditFilter=this.value;document.getElementById('main').innerHTML=renderAudit()" style="flex:1;min-width:200px;max-width:320px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;font-size:13.5px;background:var(--surface);color:var(--ink)">
+          <option value="alle"${auditFilter==='alle'?' selected':''}>Alle gebruikers (${AUDIT.length} acties)</option>
+          ${namen.map(n=>{const cnt=AUDIT.filter(a=>a.who===n).length;return `<option value="${n.replace(/"/g,'&quot;')}"${auditFilter===n?' selected':''}>${n} (${cnt})</option>`;}).join('')}
+        </select>
+        ${auditFilter!=='alle'?`<button class="btn btn-gh" style="padding:7px 12px;font-size:12.5px" onclick="auditFilter='alle';document.getElementById('main').innerHTML=renderAudit()">Filter wissen</button>`:''}
+      </div>
+    </div>`:'';
+  const lijst=items.length?items.map((a,i)=>`<div class="tl-item" style="border-bottom:${i<items.length-1?'1px solid var(--line)':'none'}"><div class="tl-dot">${IC[a.i]||IC.note}</div><div style="flex:1;padding-bottom:11px"><div style="font-size:13.5px;line-height:1.45">${a.act} <span style="font-family:var(--mono);font-size:12.5px;color:var(--ink2);background:var(--s2);padding:1px 7px;border-radius:5px">${a.tgt}</span></div><div style="font-size:12px;color:var(--ink3);margin-top:3px">${a.who?`<span style="color:var(--green-d);font-weight:600">${a.who}</span> · `:''}${a.t}</div></div></div>`).join(''):`<div style="padding:30px;text-align:center;color:var(--ink4);font-size:13px">Geen activiteiten gevonden${auditFilter!=='alle'?' voor '+auditFilter:''}.</div>`;
   return `<div class="page">
-    <div class="page-head"><h1 class="page-h1">Activiteitenlog</h1><p class="page-desc">Volledige geschiedenis van alle acties binnen het platform — voor transparantie en traceerbaarheid.</p></div>
+    <div class="page-head"><h1 class="page-h1">Activiteitenlog</h1><p class="page-desc">Volledige geschiedenis van alle acties binnen het platform — voor transparantie en traceerbaarheid.${isLead?' Als teamlead kun je per gebruiker filteren.':''}</p></div>
+    ${filterBar}
     <div class="card"><div class="card-body"><div class="stagger">
-    ${AUDIT.map((a,i)=>`<div class="tl-item" style="border-bottom:${i<AUDIT.length-1?'1px solid var(--line)':'none'}"><div class="tl-dot">${IC[a.i]}</div><div style="flex:1;padding-bottom:11px"><div style="font-size:13.5px;line-height:1.45">${a.act} <span style="font-family:var(--mono);font-size:12.5px;color:var(--ink2);background:var(--s2);padding:1px 7px;border-radius:5px">${a.tgt}</span></div><div style="font-size:12px;color:var(--ink3);margin-top:3px">${a.who?`<span style="color:var(--green-d);font-weight:600">${a.who}</span> · `:''}${a.t}</div></div></div>`).join('')}
+    ${lijst}
     </div></div></div>
   </div>`;
 }
@@ -1227,7 +1268,6 @@ const COLS=[
   {k:"last_login",d:"Laatste login (datum)",app:"Activiteit"},
   {k:"bookkeeping_program",d:"Boekhoudkoppeling (yes/no)",app:"Boekhoudkoppeling"},
   {k:"team_partner",d:"Partner (yes/no)",app:"Partner"},
-  {k:"tickets",d:"Support­tickets deze maand (optioneel)",app:"Tickets",optioneel:true},
 ];
 // Branche-vertaling van export naar nette NL-naam
 const BRANCHE_MAP={Trade:'Handel',Ecommerce:'E-commerce',Fashion:'Mode',Food:'Voeding',Production:'Productie',Technical:'Technisch',Default:'Overig'};
@@ -1247,8 +1287,7 @@ let impRows=[],impErr='',impOK=false,impParsed=[];
 // ════════════════ RISICO-INSTELLINGEN (gewichten aanpassen) ════════════════
 const WEIGHT_INFO=[
   {k:'koppeling',label:'Geen boekhoudkoppeling',oms:'Klant heeft geen actieve boekhoudkoppeling.',max:50},
-  {k:'inactief',label:'Inactiviteit (>10 dagen)',oms:'Schaalt op met het aantal dagen sinds de laatste login (vol gewicht rond 60 dagen).',max:60},
-  {k:'tickets',label:'Support­tickets (≥3 per maand)',oms:'Schaalt op met het aantal tickets (vol gewicht bij 7 of meer).',max:60},
+  {k:'inactief',label:'Inactiviteit (>10 dagen)',oms:'Schaalt op met het aantal dagen sinds de laatste login (vol gewicht rond 50 dagen, >50 dagen = kritiek).',max:60},
   {k:'ordersdaling',label:'Orders gedaald',oms:'Vol gewicht bij >50% daling, half bij >30%.',max:50},
   {k:'omzetdaling',label:'Omzetdaling (≥30%)',oms:'Maandomzet (MRR) is met 30% of meer gedaald.',max:40},
   {k:'onboarding',label:'Onboarding niet voltooid',oms:'De klant heeft de onboarding niet afgerond.',max:30},
@@ -1550,7 +1589,6 @@ function pCSV(f){
           kop:yesNo(row.bookkeeping_program),
           partner:yesNo(row.team_partner),
           onb:true,
-          tickets:(row.tickets!==undefined&&row.tickets!==''?(parseInt(row.tickets,10)||0):simTickets(row.relation_ID,act)),
           bedrag:bedragHist
         };
       });
@@ -1567,7 +1605,7 @@ function pCSV(f){
           try{
             const del=await sb.from('klanten').delete().neq('klant_id',-1); // leeg de tabel
             if(del.error){console.error('Verwijderen oude klanten:',del.error);showToast('Opslaan mislukt: '+(del.error.message||'kon tabel niet legen'),'error');return;}
-            const rows=impParsed.map(c=>({klantcode:c.id,branche:c.branche,subscriptie:c.sub,maandbedrag:c.bedrag[c.bedrag.length-1],aantal_orders:c.orders[c.orders.length-1],dagen_inactief:c.act,boekhoudkoppeling:c.kop,partner:c.partner,onboarding_voltooid:c.onb,tickets:c.tickets,status:'actief',orders_historie:c.orders,bedrag_historie:c.bedrag}));
+            const rows=impParsed.map(c=>({klantcode:c.id,branche:c.branche,subscriptie:c.sub,maandbedrag:c.bedrag[c.bedrag.length-1],aantal_orders:c.orders[c.orders.length-1],dagen_inactief:c.act,boekhoudkoppeling:c.kop,partner:c.partner,onboarding_voltooid:c.onb,status:'actief',orders_historie:c.orders,bedrag_historie:c.bedrag}));
             // in batches van 200 invoegen, met foutcontrole per batch
             let saved=0;
             for(let i=0;i<rows.length;i+=200){
@@ -1740,6 +1778,38 @@ function openChurnPicker(){
   setTimeout(()=>{const i=document.getElementById('churnpick-search');if(i)i.focus();},50);
 }
 function closeChurnPicker(e){if(e&&e.target!==document.getElementById('churnpick-ov'))return;document.getElementById('churnpick-ov').classList.remove('open');document.body.style.overflow='';}
+
+// ══════ MRR-AT-RISK: lijst van klanten die de risico-omzet vormen ══════
+function showMrrList(){
+  const list=[...URGENT].sort((a,b)=>b.bedrag[b.bedrag.length-1]-a.bedrag[a.bedrag.length-1]);
+  const totaal=list.reduce((s,c)=>s+c.bedrag[c.bedrag.length-1],0);
+  const rows=list.map(c=>{
+    const mrr=Math.round(c.bedrag[c.bedrag.length-1]);
+    return `<div onclick="closeMrrList();openDetail('${c.id}')" style="display:flex;align-items:center;gap:11px;padding:12px 13px;border-radius:9px;cursor:pointer;border:1px solid var(--line);margin-bottom:7px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='none'">
+      <span class="cid">${c.id}</span>
+      <span class="tag">${c.branche}</span>
+      <span class="b ${c.risk.soft}" style="font-size:10.5px">${c.risk.label}</span>
+      <span style="flex:1"></span>
+      <span style="font-size:12px;color:var(--ink3)">${c.act}d inactief</span>
+      <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--crit)">€${mrr.toLocaleString('nl-NL')}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('mrr-sheet').innerHTML=`
+    <div class="card-head" style="position:sticky;top:0;background:var(--surface);z-index:5;border-radius:var(--rx) var(--rx) 0 0">
+      <div>
+        <div class="card-sub" style="margin-bottom:2px">Maandomzet op het spel</div>
+        <div class="card-title" style="font-size:17px">MRR-at-risk · €${Math.round(totaal).toLocaleString('nl-NL')}</div>
+      </div>
+      <button class="tb-btn" onclick="closeMrrList()" style="box-shadow:none">✕</button>
+    </div>
+    <div style="padding:16px 21px 21px">
+      <div style="font-size:12.5px;color:var(--ink3);margin-bottom:14px">Dit zijn de ${list.length} risicoklanten (Kritiek + Hoog) waarvan de maandomzet op het spel staat. Gesorteerd op hoogste bedrag. Klik een klant voor details.</div>
+      ${rows||'<div style="padding:24px;text-align:center;color:var(--ink4)">Geen risicoklanten op dit moment.</div>'}
+    </div>`;
+  document.getElementById('mrr-ov').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeMrrList(e){if(e&&e.target!==document.getElementById('mrr-ov'))return;document.getElementById('mrr-ov').classList.remove('open');document.body.style.overflow='';}
 function renderChurnPicker(){
   const q=churnPickSearch.trim().toLowerCase();
   const churnedIds=new Set(CHURNED.map(c=>c.id));
@@ -1883,7 +1953,6 @@ function genEmail(c){
   const langInactief=c.act>=50;
   const matigInactief=c.act>=20&&c.act<50;
   const ordersGedaald=r.recent<r.avg*0.7;
-  const veelTickets=(r.tickets||0)>=5;
 
   // Kernboodschap kiezen
   if(!heeftKoppeling){
@@ -1895,9 +1964,6 @@ function genEmail(c){
   }else if(ordersGedaald){
     kern=`We zien dat het aantal orders via Brincr de laatste tijd is teruggelopen, van gemiddeld ${r.avg} naar ${r.recent} per maand. Dat willen we graag samen omdraaien.`;
     actie=`In een kort gesprek kijken we wat er speelt en hoe we jullie beter kunnen ondersteunen.`;
-  }else if(veelTickets){
-    kern=`We zagen dat jullie recent meerdere supportvragen hadden. Dat horen we serieus op te pakken, want jullie ervaring met Brincr staat voorop.`;
-    actie=`Ik bespreek graag persoonlijk hoe we de openstaande punten kunnen oplossen.`;
   }else if(matigInactief){
     kern=`We merken dat het gebruik van Brincr wat is afgenomen. We horen graag of alles naar wens verloopt.`;
     actie=`Een kort gesprek helpt ons jullie nog beter van dienst te zijn.`;
@@ -1946,7 +2012,7 @@ function drawCharts(){
   cdestroy('donut');const dn=document.getElementById('donut');
   if(dn){const k=CUSTOMERS.filter(c=>c.risk.label==='Kritiek').length,hh=CUSTOMERS.filter(c=>c.risk.label==='Hoog').length,m=CUSTOMERS.filter(c=>c.risk.label==='Middel').length,l=CUSTOMERS.filter(c=>c.risk.label==='Laag').length;const labelsArr=['Kritiek','Hoog','Middel','Laag'];const donutTip=Object.assign({},tip(),{callbacks:{title:items=>labelsArr[items[0].dataIndex],label:item=>{const lbl=labelsArr[item.dataIndex];const ids=CUSTOMERS.filter(c=>c.risk.label===lbl).map(c=>c.id);return ids.length?ids:['Geen klanten'];}}});charts['donut']=new Chart(dn,{type:'doughnut',data:{labels:labelsArr,datasets:[{data:[k,hh,m,l],backgroundColor:[hex('var(--crit)'),hex('var(--high)'),hex('var(--med)'),hex('var(--low)')],borderWidth:0,spacing:2}]},options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{animateRotate:true,duration:900},plugins:{legend:{display:false},tooltip:donutTip}}});}
 }
-document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();const s=document.getElementById('gsearch');if(s)s.focus();}if(e.key==='Escape'){closeDetail();closeChurn();closeProfile();closeActionModal();}});
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();const s=document.getElementById('gsearch');if(s)s.focus();}if(e.key==='Escape'){closeDetail();closeChurn();closeProfile();closeActionModal();closeMrrList();closeChurnPicker();}});
 
 // INIT — toont registratie/login scherm (shell is verborgen tot login)
 switchAuth('login');
