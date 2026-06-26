@@ -434,6 +434,7 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
 <div class="ov" id="churnpick-ov" onclick="closeChurnPicker(event)"><div class="sheet sheet-sm" id="churnpick-sheet"></div></div>
 <div class="ov" id="mrr-ov" onclick="closeMrrList(event)"><div class="sheet" id="mrr-sheet"></div></div>
 <div class="ov" id="trend-ov" onclick="closeTrendEditor(event)"><div class="sheet sheet-sm" id="trend-sheet"></div></div>
+<div class="ov" id="salescall-ov" onclick="closeSalesCall(event)"><div class="sheet sheet-sm" id="salescall-sheet"></div></div>
 <script>
 // DATA
 const RAW=[
@@ -690,6 +691,13 @@ function isTeamlead(){
   if(ME.email&&ADMIN_EMAILS.includes(ME.email.toLowerCase()))return true;
   if(ME.name&&ME.name.toLowerCase().includes('hamza aberkane'))return true;
   return false;
+}
+// Sales-medewerker (of de beheerder) — mag servicegesprekken inplannen bij gechurnde klanten
+function isSales(){
+  if(!ME)return false;
+  if(isTeamlead())return true; // beheerder/teamlead mag alles
+  const f=(ME.functie||'').toLowerCase(), r=(ME.role||'').toLowerCase();
+  return f.includes('sales')||r.includes('sales');
 }
 const AVATAR_COLORS=["#247a59","#2f9e74","#5cb89a","#1f7a4d","#3d9b7a"];
 const MAX_ATTEMPTS=5, LOCKOUT_MS=30000, SESSION_MS=30*60*1000;
@@ -1167,6 +1175,7 @@ function renderDash(){
   const kritiek=CUSTOMERS.filter(c=>c.risk.label==="Kritiek"),hoog=CUSTOMERS.filter(c=>c.risk.label==="Hoog");
   const top5=CUSTOMERS.slice(0,5),mrr=mrrAtRisk(),tmrr=totalMRR();
   const lead=isTeamlead(); // alleen teamlead/beheerder mag de cijfers/churn aanpassen
+  const sales=isSales();   // sales (of beheerder) mag servicegesprekken inplannen bij gechurnde klanten
   const dots3=`<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="13" r="1.4" fill="currentColor"/></svg>`;
   const GO=t=>`go(&quot;${t}&quot;)`;
   const stat=(ic,bg,col,l,v,f,variant,oc)=>{
@@ -1226,7 +1235,7 @@ function renderDash(){
       <div class="card"><div class="card-head"><div><div class="card-title">Recente activiteit</div><div class="card-sub">Team-acties</div></div><button class="btn btn-gh" style="padding:5px 11px;font-size:11.5px" onclick="go('audit')">Alles</button></div><div class="card-body" style="padding-top:8px;padding-bottom:8px">${AUDIT.slice(0,4).map(a=>`<div class="tl-item" style="padding:8px 0"><div class="tl-dot" style="width:28px;height:28px">${IC[a.i]}</div><div style="flex:1;min-width:0"><div style="font-size:12.5px;line-height:1.4">${a.act}</div><div style="font-size:11px;color:var(--ink3);margin-top:1px"><span style="font-family:var(--mono)">${a.tgt}</span> · ${a.t}</div></div></div>`).join('')}</div></div>
     </div>
     <div class="card">
-      <div class="card-head"><div><div class="card-title">Gechurnd deze maand</div><div class="card-sub">${CHURNED.length} klanten · ${H.eur(CHURNED.reduce((s,c)=>s+c.mrr,0))} MRR verloren</div></div><div style="display:flex;align-items:center;gap:6px"><button class="btn btn-gh" style="padding:6px 12px;font-size:12px" onclick="showChurn()">Details</button>${lead?`<button class="act-btn" title="Klant als gechurnd markeren" onclick="openChurnPicker()">${dots3}</button>`:''}</div></div>
+      <div class="card-head"><div><div class="card-title">Gechurnd deze maand</div><div class="card-sub">${CHURNED.length} klanten · ${H.eur(CHURNED.reduce((s,c)=>s+c.mrr,0))} MRR verloren</div></div><div style="display:flex;align-items:center;gap:6px"><button class="btn btn-gh" style="padding:6px 12px;font-size:12px" onclick="showChurn()">Details</button>${sales?`<button class="act-btn" title="Servicegesprek inplannen" onclick="openSalesCall()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5.5 2.5l1.5 3-1.5 1.2a8 8 0 003.8 3.8L10.5 9l3 1.5v2.5a1 1 0 01-1.1 1A11 11 0 012.5 3.6 1 1 0 013.5 2.5h2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></button>`:''}${lead?`<button class="act-btn" title="Klant als gechurnd markeren" onclick="openChurnPicker()">${dots3}</button>`:''}</div></div>
       ${CHURNED.map(c=>`<div class="lrow" style="cursor:default"><span class="cid">${c.id}</span><span class="tag">${c.branche}</span><span class="cmeta" style="flex:1">${c.reden}</span><span style="font-family:var(--mono);font-size:12px;color:var(--crit);font-weight:600">−${H.eur(c.mrr)}</span>${lead?`<button class="act-btn" title="Verwijder uit gechurnd" onclick="unchurn('${c.id}')" style="margin-left:8px"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`:''}</div>`).join('')}
     </div>
   </div>`;
@@ -1910,6 +1919,70 @@ function saveTrendEditor(type){
   render();
   showToast('Cijfers bijgewerkt.','success');
 }
+
+// ══════ SALES: servicegesprek inplannen bij gechurnde klanten ══════
+let salesCallSel=null;
+function openSalesCall(){
+  salesCallSel=null;
+  renderSalesCall();
+  document.getElementById('salescall-ov').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeSalesCall(e){if(e&&e.target!==document.getElementById('salescall-ov'))return;document.getElementById('salescall-ov').classList.remove('open');document.body.style.overflow='';salesCallSel=null;}
+function renderSalesCall(){
+  // kies een gechurnde klant en plan een terugwin-gesprek
+  const klantOpties=CHURNED.length?CHURNED.map(c=>`<option value="${c.id}"${salesCallSel===c.id?' selected':''}>${c.id} · ${c.branche} (−${H.eur(c.mrr)})</option>`).join(''):'';
+  // datum-suggestie: morgen
+  const morgen=new Date(Date.now()+86400000).toISOString().slice(0,10);
+  document.getElementById('salescall-sheet').innerHTML=`
+    <div class="card-head" style="position:sticky;top:0;background:var(--surface);z-index:5;border-radius:var(--rx) var(--rx) 0 0">
+      <div><div class="card-sub" style="margin-bottom:2px">Sales · terugwinnen</div><div class="card-title" style="font-size:16px">Servicegesprek inplannen</div></div>
+      <button class="tb-btn" onclick="closeSalesCall()" style="box-shadow:none">✕</button>
+    </div>
+    <div style="padding:16px 21px 21px">
+      <div id="salescall-msg" style="display:none"></div>
+      ${CHURNED.length?`
+      <div style="font-size:12.5px;color:var(--ink3);margin-bottom:14px">Plan een terugwin-gesprek met een gechurnde klant. Het gesprek wordt vastgelegd in het activiteitenlog.</div>
+      <label class="fld-l">Gechurnde klant</label>
+      <select id="sc-klant" class="auth-in" style="margin-bottom:13px">${klantOpties}</select>
+      <label class="fld-l">Datum</label>
+      <input type="date" id="sc-datum" class="auth-in" value="${morgen}" style="margin-bottom:13px"/>
+      <label class="fld-l">Type gesprek</label>
+      <select id="sc-type" class="auth-in" style="margin-bottom:13px">
+        <option>Telefonisch terugwin-gesprek</option>
+        <option>Videocall (Teams)</option>
+        <option>Bezoek op locatie</option>
+        <option>Heractivatie-aanbod bespreken</option>
+      </select>
+      <label class="fld-l">Notitie (optioneel)</label>
+      <textarea id="sc-notitie" class="auth-in" rows="3" placeholder="Bijv. aanbod nieuwe prijsafspraak, reden van vertrek bespreken…" style="resize:vertical;margin-bottom:16px"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:9px">
+        <button class="btn btn-gh" onclick="closeSalesCall()">Annuleren</button>
+        <button class="btn btn-pri" onclick="saveSalesCall()">Gesprek inplannen</button>
+      </div>`:`
+      <div style="padding:24px;text-align:center;color:var(--ink4);font-size:13.5px">Er zijn op dit moment geen gechurnde klanten om een gesprek mee in te plannen.</div>`}
+    </div>`;
+}
+async function saveSalesCall(){
+  const id=document.getElementById('sc-klant').value;
+  const datum=document.getElementById('sc-datum').value;
+  const type=document.getElementById('sc-type').value;
+  const notitie=document.getElementById('sc-notitie').value.trim();
+  const msg=document.getElementById('salescall-msg');
+  if(!id||!datum){if(msg){msg.style.cssText='display:block;background:var(--crit-soft);border:1px solid var(--crit);color:var(--crit);border-radius:9px;padding:10px 13px;font-size:12.5px;margin-bottom:12px';msg.textContent='Kies een klant en een datum.';}return;}
+  const datumNL=new Date(datum).toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'});
+  const tekst=`Servicegesprek ingepland (${type}) op ${datumNL}`+(notitie?` — ${notitie}`:'');
+  // vastleggen als notitie bij de klant
+  if(!CLIENT_NOTES[id])CLIENT_NOTES[id]=[];
+  CLIENT_NOTES[id].unshift({type:'servicegesprek',label:'Servicegesprek (Sales)',icon:'phone',text:tekst,by:ME?ME.name:'Sales',ts:Date.now()});
+  // opslaan in database (acties) + logboek
+  if(sb){try{
+    await sb.from('acties').insert({klantcode:id,type:'servicegesprek',tekst:tekst,gebruiker_naam:ME?ME.name:null});
+  }catch(e){console.error('Servicegesprek opslaan mislukt:',e);}}
+  logAction('Servicegesprek ingepland (Sales)',id);
+  closeSalesCall();
+  showToast('Servicegesprek voor '+id+' ingepland op '+datumNL+'.','success');
+}
 function renderChurnPicker(){
   const q=churnPickSearch.trim().toLowerCase();
   const churnedIds=new Set(CHURNED.map(c=>c.id));
@@ -2112,7 +2185,7 @@ function drawCharts(){
   cdestroy('donut');const dn=document.getElementById('donut');
   if(dn){const k=CUSTOMERS.filter(c=>c.risk.label==='Kritiek').length,hh=CUSTOMERS.filter(c=>c.risk.label==='Hoog').length,m=CUSTOMERS.filter(c=>c.risk.label==='Middel').length,l=CUSTOMERS.filter(c=>c.risk.label==='Laag').length;const labelsArr=['Kritiek','Hoog','Middel','Laag'];const donutTip=Object.assign({},tip(),{callbacks:{title:items=>labelsArr[items[0].dataIndex],label:item=>{const lbl=labelsArr[item.dataIndex];const ids=CUSTOMERS.filter(c=>c.risk.label===lbl).map(c=>c.id);return ids.length?ids:['Geen klanten'];}}});charts['donut']=new Chart(dn,{type:'doughnut',data:{labels:labelsArr,datasets:[{data:[k,hh,m,l],backgroundColor:[hex('var(--crit)'),hex('var(--high)'),hex('var(--med)'),hex('var(--low)')],borderWidth:0,spacing:2}]},options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{animateRotate:true,duration:900},plugins:{legend:{display:false},tooltip:donutTip}}});}
 }
-document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();const s=document.getElementById('gsearch');if(s)s.focus();}if(e.key==='Escape'){closeDetail();closeChurn();closeProfile();closeActionModal();closeMrrList();closeChurnPicker();closeTrendEditor();}});
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();const s=document.getElementById('gsearch');if(s)s.focus();}if(e.key==='Escape'){closeDetail();closeChurn();closeProfile();closeActionModal();closeMrrList();closeChurnPicker();closeTrendEditor();closeSalesCall();}});
 
 // INIT — toont registratie/login scherm (shell is verborgen tot login)
 switchAuth('login');
