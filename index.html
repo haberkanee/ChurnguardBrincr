@@ -2203,10 +2203,14 @@ function showDistPop(ev,label){
   pop.innerHTML=`<div style="font-size:11px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:7px;display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:${colorMap[label]}"></span>${label} · ${cs.length} klant${cs.length===1?'':'en'}</div>${cs.length?cs.map(c=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:3px 0"><span style="font-size:12px;font-family:var(--mono);font-weight:600">${c.id}</span><span style="font-size:11px;color:var(--ink3)">${c.branche}</span><span style="font-size:12px;font-weight:700;color:${colorMap[label]};font-family:var(--mono)">${c.risk.score}</span></div>`).join(''):'<div style="font-size:12px;color:var(--ink4)">Geen klanten in deze categorie</div>'}`;
   pop.style.display='block';
   const r=ev.currentTarget.getBoundingClientRect();
-  let left=r.left-250;if(left<8)left=r.right+10;
-  let top=r.top;
-  const ph=pop.offsetHeight||cs.length*24+40;
-  if(top+ph>window.innerHeight-8)top=window.innerHeight-ph-8;
+  const pw=pop.offsetWidth||250, ph=pop.offsetHeight||cs.length*24+40;
+  // standaard: direct ONDER het item, links uitgelijnd
+  let left=r.left;
+  let top=r.bottom+8;
+  // als de popup rechts buiten beeld valt, schuif hem terug naar binnen
+  if(left+pw>window.innerWidth-8)left=window.innerWidth-pw-8;
+  // als de popup onderaan niet past, toon hem dan juist BOVEN het item
+  if(top+ph>window.innerHeight-8)top=r.top-ph-8;
   pop.style.left=Math.max(8,left)+'px';pop.style.top=Math.max(8,top)+'px';
 }
 function hideDistPop(){const p=document.getElementById('dist-pop');if(p)p.style.display='none';}
