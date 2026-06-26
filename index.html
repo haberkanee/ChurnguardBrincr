@@ -1244,18 +1244,24 @@ function renderDash(){
 let kf={search:'',branche:'Alle',status:'Alle',sort:'score'};
 function renderKlanten(){
   const branches=['Alle',...new Set(CUSTOMERS.map(c=>c.branche))];
+  // klanten met een notitie? (actief + gechurnd) — voor het notitie-filter
+  const heeftNotitie=id=>CLIENT_NOTES[id]&&CLIENT_NOTES[id].length>0;
   let list=[...CUSTOMERS];
   if(kf.branche!=='Alle')list=list.filter(c=>c.branche===kf.branche);
-  if(kf.status==='Gechurnd')list=[];else if(kf.status!=='Alle')list=list.filter(c=>c.risk.label===kf.status);
+  if(kf.status==='Gechurnd')list=[];
+  else if(kf.status==='Met notitie')list=list.filter(c=>heeftNotitie(c.id));
+  else if(kf.status!=='Alle')list=list.filter(c=>c.risk.label===kf.status);
   if(kf.search)list=list.filter(c=>c.id.toUpperCase().includes(kf.search.toUpperCase()));
   if(kf.sort==='orders')list.sort((a,b)=>a.risk.recent-b.risk.recent);else if(kf.sort==='act')list.sort((a,b)=>b.act-a.act);else list.sort((a,b)=>b.risk.score-a.risk.score);
+  // gechurnde klanten mét notitie (voor in het notitie-filter onderaan)
+  const gechurndMetNotitie=CHURNED.filter(c=>heeftNotitie(c.id));
   const GT='104px 96px 88px 64px 68px 76px 116px 92px minmax(180px,1fr)';
   return `<div class="page">
     <div class="page-head"><h1 class="page-h1">Klanten</h1><p class="page-desc">Volledig overzicht van alle actieve klanten en hun risicoprofiel.</p></div>
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
       <label class="filt"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="var(--ink4)" stroke-width="1.6"/><path d="M11 11l3 3" stroke="var(--ink4)" stroke-width="1.6" stroke-linecap="round"/></svg><input type="text" placeholder="Zoek klantcode" autocomplete="off" value="${kf.search}" style="border:none;background:none;width:120px" oninput="kf.search=this.value;document.getElementById('main').innerHTML=renderKlanten()"/></label>
       <label class="filt">Branche: <select onchange="kf.branche=this.value;document.getElementById('main').innerHTML=renderKlanten()">${branches.map(b=>`<option${b===kf.branche?' selected':''}>${b}</option>`).join('')}</select></label>
-      <label class="filt"${kf.status!=='Alle'?' style="border-color:var(--green-l);color:var(--green-d)"':''}>Status: <select onchange="kf.status=this.value;document.getElementById('main').innerHTML=renderKlanten()">${['Alle','Kritiek','Hoog','Middel','Laag','Gechurnd'].map(s=>`<option${s===kf.status?' selected':''}>${s}</option>`).join('')}</select></label>
+      <label class="filt"${kf.status!=='Alle'?' style="border-color:var(--green-l);color:var(--green-d)"':''}>Status: <select onchange="kf.status=this.value;document.getElementById('main').innerHTML=renderKlanten()">${['Alle','Kritiek','Hoog','Middel','Laag','Met notitie','Gechurnd'].map(s=>`<option${s===kf.status?' selected':''}>${s}</option>`).join('')}</select></label>
       <div class="seg" style="margin-left:auto">${[['score','Score'],['orders','Orders'],['act','Inactief']].map(([k,l])=>`<button class="seg-b ${kf.sort===k?'active':''}" onclick="kf.sort='${k}';document.getElementById('main').innerHTML=renderKlanten()">${l}</button>`).join('')}</div>
     </div>
     ${kf.status==='Gechurnd'?`<div class="card"><div class="card-head"><div><div class="card-title">Gechurnde klanten</div><div class="card-sub">Reeds opgezegd — geen actie meer mogelijk</div></div></div>${CHURNED.map(c=>`<div class="lrow" style="cursor:default"><span class="cid">${c.id}</span><span class="tag">${c.branche}</span><span class="cmeta" style="flex:1">${c.reden}</span><span style="font-family:var(--mono);color:var(--crit);font-size:12px;font-weight:600">−${H.eur(c.mrr)}</span></div>`).join('')}</div>`:`
@@ -1276,8 +1282,38 @@ function renderKlanten(){
         <div class="lrow mob"><div style="flex:1;min-width:0" onclick="openDetail('${c.id}')"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="cid">${c.id}</span>${H.badge(c.risk)}</div><div class="cmeta" style="margin-bottom:7px">${c.branche} · ${c.sub}</div>${H.sbar(c.risk.score,c.risk.color)}</div><button class="act-btn" style="margin-left:8px;flex-shrink:0" onclick="event.stopPropagation();openActionModal('${c.id}','notitie')" title="Notitie toevoegen"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M4 2.5h6L13 5.5v8a1 1 0 01-1 1H4a1 1 0 01-1-1v-10a1 1 0 011-1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M5.5 7.5h5M5.5 10h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button><span style="font-size:18px;font-weight:800;color:${c.risk.color};margin-left:10px" onclick="openDetail('${c.id}')">${c.risk.score}</span></div>
       `).join('')}
       </div></div>
+      ${kf.status==='Met notitie'&&gechurndMetNotitie.length?`
+      <div class="card" style="margin-top:16px">
+        <div class="card-head"><div><div class="card-title">Gechurnde klanten met notitie</div><div class="card-sub">${gechurndMetNotitie.length} opgezegde klant(en) met een notitie of servicegesprek</div></div></div>
+        <div style="padding:4px 0">
+        ${gechurndMetNotitie.map(c=>{const n=CLIENT_NOTES[c.id][0];return `<div class="lrow" onclick="openChurnedDetail('${c.id}')" style="cursor:pointer"><span class="cid">${c.id}</span><span class="tag">${c.branche}</span><span class="b b-crit" style="font-size:10.5px">Gechurnd</span><span class="cmeta" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.text}</span><span style="font-size:11px;color:var(--green-d);background:var(--green-soft);padding:1px 7px;border-radius:99px;font-weight:600">${CLIENT_NOTES[c.id].length} notitie(s)</span></div>`;}).join('')}
+        </div>
+      </div>`:''}
     </div>`}
   </div>`;
+}
+// Toont de notities van een gechurnde klant (die niet meer in CUSTOMERS staat)
+function openChurnedDetail(id){
+  const c=CHURNED.find(x=>x.id===id);if(!c)return;
+  const notes=CLIENT_NOTES[id]||[];
+  document.getElementById('detail-sheet').innerHTML=`
+    <div class="card-head" style="position:sticky;top:0;background:var(--surface);z-index:5;border-radius:var(--rx) var(--rx) 0 0">
+      <div style="display:flex;align-items:center;gap:11px">
+        <span class="cid" style="font-size:16px">${c.id}</span><span class="tag">${c.branche}</span><span class="b b-crit" style="font-size:10.5px">Gechurnd</span>
+      </div>
+      <button class="tb-btn" onclick="closeDetail()" style="box-shadow:none">✕</button>
+    </div>
+    <div style="padding:18px 21px 21px">
+      <div style="background:var(--crit-soft);border:1px solid var(--crit);border-radius:11px;padding:13px 15px;margin-bottom:18px">
+        <div style="font-size:12px;color:var(--crit);font-weight:600;margin-bottom:3px">Reden van churn</div>
+        <div style="font-size:13.5px;color:var(--ink)">${c.reden}</div>
+        <div style="font-size:12px;color:var(--ink3);margin-top:6px">Verloren maandomzet: <b style="color:var(--crit)">−${H.eur(c.mrr)}</b></div>
+      </div>
+      <div class="sec" style="margin-bottom:10px">Notities &amp; servicegesprekken</div>
+      <div id="notes-list-${id}">${renderNotesList(id)}</div>
+    </div>`;
+  document.getElementById('detail-ov').classList.add('open');
+  document.body.style.overflow='hidden';
 }
 
 // ALERTS
@@ -1976,7 +2012,7 @@ async function saveSalesCall(){
   CLIENT_NOTES[id].unshift({type:'servicegesprek',label:'Servicegesprek (Sales)',icon:'phone',text:tekst,by:ME?ME.name:'Sales',ts:Date.now()});
   // opslaan in database (acties) + logboek
   if(sb){try{
-    await sb.from('acties').insert({klantcode:id,type:'servicegesprek',tekst:tekst,gebruiker_naam:ME?ME.name:null});
+    await sb.from('acties').insert({klantcode:id,type:'servicegesprek',label:'Servicegesprek (Sales)',icon:'phone',tekst:tekst,gebruiker_naam:ME?ME.name:null});
   }catch(e){console.error('Servicegesprek opslaan mislukt:',e);}}
   logAction('Servicegesprek ingepland (Sales)',id);
   closeSalesCall();
