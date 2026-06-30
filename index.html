@@ -439,6 +439,7 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
 <div class="ov" id="mrr-ov" onclick="closeMrrList(event)"><div class="sheet" id="mrr-sheet"></div></div>
 <div class="ov" id="trend-ov" onclick="closeTrendEditor(event)"><div class="sheet sheet-sm" id="trend-sheet"></div></div>
 <div class="ov" id="salescall-ov" onclick="closeSalesCall(event)"><div class="sheet sheet-sm" id="salescall-sheet"></div></div>
+<div class="ov" id="churnreason-ov" onclick="closeChurnReason(event)"><div class="sheet sheet-sm" id="churnreason-sheet"></div></div>
 <script>
 // DATA
 const RAW=[
@@ -2096,26 +2097,84 @@ async function markChurned(id){
   showToast(id+' gemarkeerd als gechurnd.','success');
   sendChurnBriefing(c, redenTekst, mrr); // briefing naar portaalgebruikers
 }
-// Klant direct als gechurnd markeren vanuit het klantdetail, met een opgegeven reden.
-async function churnFromDetail(id){
+// Klant als gechurnd markeren vanuit het klantdetail — opent een keuzevenster in de app.
+let churnReasonId=null;
+function churnFromDetail(id){
   const c=CUSTOMERS.find(x=>x.id===id);if(!c)return;
-  const standaard=c.risk.flags&&c.risk.flags.length?c.risk.flags[0].m:'';
-  const reden=window.prompt('Reden van churn voor '+id+' (optioneel — wordt ook in de e-mailbriefing vermeld):', standaard);
-  if(reden===null)return; // geannuleerd
-  const redenTekst=(reden&&reden.trim())?reden.trim():(standaard||'Handmatig gemarkeerd als gechurnd');
+  churnReasonId=id;
+  renderChurnReason(c);
+  document.getElementById('churnreason-ov').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeChurnReason(e){if(e&&e.target!==document.getElementById('churnreason-ov'))return;document.getElementById('churnreason-ov').classList.remove('open');document.body.style.overflow='';churnReasonId=null;}
+// De selecteerbare standaardredenen (gebaseerd op onze risicocriteria)
+const CHURN_REASONS=[
+  "Geen boekhoudkoppeling",
+  "Langdurige inactiviteit",
+  "Sterke daling in orders",
+  "Sterke daling in omzet",
+  "Onboarding niet voltooid",
+  "Overgestapt naar concurrent",
+  "Te duur / prijs",
+  "Bedrijf gestopt of overgenomen"
+];
+function renderChurnReason(c){
+  // vink standaard de redenen aan die uit de risicosignalen van deze klant blijken
+  const auto=new Set();
+  (c.risk.flags||[]).forEach(f=>{
+    const m=(f.m||'').toLowerCase();
+    if(m.includes('boekhoud'))auto.add("Geen boekhoudkoppeling");
+    if(m.includes('inactief'))auto.add("Langdurige inactiviteit");
+    if(m.includes('orders'))auto.add("Sterke daling in orders");
+    if(m.includes('omzet'))auto.add("Sterke daling in omzet");
+    if(m.includes('onboarding'))auto.add("Onboarding niet voltooid");
+  });
   const mrr=Math.round(c.bedrag[c.bedrag.length-1]);
-  // toevoegen aan gechurnd met de opgegeven reden
+  document.getElementById('churnreason-sheet').innerHTML=`
+    <div class="card-head" style="position:sticky;top:0;background:var(--surface);z-index:5;border-radius:var(--rx) var(--rx) 0 0">
+      <div><div class="card-sub" style="margin-bottom:2px">Klant afmelden</div><div class="card-title" style="font-size:16px">${c.id} markeren als gechurnd</div></div>
+      <button class="tb-btn" onclick="closeChurnReason()" style="box-shadow:none">✕</button>
+    </div>
+    <div style="padding:16px 21px 21px">
+      <div style="font-size:12.5px;color:var(--ink3);margin-bottom:6px">Verloren maandomzet: <b style="color:var(--crit)">−${H.eur(mrr)}</b> · branche ${c.branche}</div>
+      <label class="fld-l" style="margin-bottom:8px;display:block">Reden(en) van churn <span style="color:var(--ink4);font-weight:400">— selecteer een of meer</span></label>
+      <div id="cr-options" style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px">
+        ${CHURN_REASONS.map((r,i)=>`
+          <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;cursor:pointer;font-size:13.5px" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background='none'">
+            <input type="checkbox" class="cr-check" value="${r.replace(/"/g,'&quot;')}"${auto.has(r)?' checked':''} style="width:16px;height:16px;accent-color:var(--green-d);cursor:pointer"/>
+            <span>${r}</span>
+          </label>`).join('')}
+      </div>
+      <label class="fld-l" style="margin-bottom:6px;display:block">Aanvullende toelichting <span style="color:var(--ink4);font-weight:400">— optioneel</span></label>
+      <textarea id="cr-extra" class="auth-in" rows="2" placeholder="Bijv. specifieke details over het vertrek van deze klant…" style="resize:vertical;margin-bottom:16px"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:9px">
+        <button class="btn btn-gh" onclick="closeChurnReason()">Annuleren</button>
+        <button class="btn btn-pri" style="background:var(--crit);border-color:var(--crit)" onclick="saveChurnReason()">Markeer als gechurnd</button>
+      </div>
+    </div>`;
+}
+async function saveChurnReason(){
+  const id=churnReasonId;if(!id)return;
+  const c=CUSTOMERS.find(x=>x.id===id);if(!c){closeChurnReason();return;}
+  const gekozen=Array.from(document.querySelectorAll('.cr-check')).filter(x=>x.checked).map(x=>x.value);
+  const extra=document.getElementById('cr-extra').value.trim();
+  // bouw de redentekst op uit de selectie + toelichting
+  let delen=[...gekozen];
+  if(extra)delen.push(extra);
+  const redenTekst=delen.length?delen.join('; '):'Handmatig gemarkeerd als gechurnd';
+  const mrr=Math.round(c.bedrag[c.bedrag.length-1]);
+  // toevoegen aan gechurnd
   CHURNED.unshift({id:c.id,branche:c.branche,reden:redenTekst,mrr});
   CUSTOMERS=CUSTOMERS.filter(x=>x.id!==id);
   URGENT=URGENT.filter(x=>x.id!==id);
   if(sb){try{await sb.from('klanten').update({status:'gechurnd'}).eq('klantcode',id);}catch(e){console.error('Churn-status opslaan:',e);}}
   logAction('Klant gemarkeerd als gechurnd',id);
+  closeChurnReason();
   closeDetail();
   rebuildCustomers(CUSTOMERS);
   render();
   showToast(id+' gemarkeerd als gechurnd.','success');
-  // e-mailbriefing naar alle portaalgebruikers
-  sendChurnBriefing(c, redenTekst, mrr);
+  sendChurnBriefing(c, redenTekst, mrr); // briefing naar portaalgebruikers
 }
 // Stuur een korte briefing naar alle gebruikers van het portaal wanneer een klant churnt.
 async function sendChurnBriefing(c, reden, mrr){
@@ -2299,7 +2358,7 @@ function drawCharts(){
   cdestroy('donut');const dn=document.getElementById('donut');
   if(dn){const k=CUSTOMERS.filter(c=>c.risk.label==='Kritiek').length,hh=CUSTOMERS.filter(c=>c.risk.label==='Hoog').length,m=CUSTOMERS.filter(c=>c.risk.label==='Middel').length,l=CUSTOMERS.filter(c=>c.risk.label==='Laag').length;const labelsArr=['Kritiek','Hoog','Middel','Laag'];const donutTip=Object.assign({},tip(),{callbacks:{title:items=>labelsArr[items[0].dataIndex],label:item=>{const lbl=labelsArr[item.dataIndex];const ids=CUSTOMERS.filter(c=>c.risk.label===lbl).map(c=>c.id);return ids.length?ids:['Geen klanten'];}}});charts['donut']=new Chart(dn,{type:'doughnut',data:{labels:labelsArr,datasets:[{data:[k,hh,m,l],backgroundColor:[hex('var(--crit)'),hex('var(--high)'),hex('var(--med)'),hex('var(--low)')],borderWidth:0,spacing:2}]},options:{responsive:true,maintainAspectRatio:false,cutout:'72%',animation:{animateRotate:true,duration:900},plugins:{legend:{display:false},tooltip:donutTip}}});}
 }
-document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();const s=document.getElementById('gsearch');if(s)s.focus();}if(e.key==='Escape'){closeDetail();closeChurn();closeProfile();closeActionModal();closeMrrList();closeChurnPicker();closeTrendEditor();closeSalesCall();}});
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();const s=document.getElementById('gsearch');if(s)s.focus();}if(e.key==='Escape'){closeDetail();closeChurn();closeProfile();closeActionModal();closeMrrList();closeChurnPicker();closeTrendEditor();closeSalesCall();closeChurnReason();}});
 
 // INIT — toont registratie/login scherm (shell is verborgen tot login)
 switchAuth('login');
