@@ -398,11 +398,15 @@ textarea.auth-in{font-family:var(--sans);line-height:1.5;}
       <button class="nav-item" data-tab="import" onclick="go('import')"><svg class="ni" viewBox="0 0 20 20" fill="none"><path d="M10 13V3m0 0L6.5 6.5M10 3l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 13v2.5A1.5 1.5 0 004.5 17h11a1.5 1.5 0 001.5-1.5V13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Data-import</button>
     </nav>
     <div class="sidebar-foot">
-      <button class="user-chip" onclick="openProfile()" title="Mijn profiel">
-        <div class="avatar" id="sb-av">CS</div>
-        <div class="user-meta"><div class="user-name" id="sb-name">—</div><div class="user-role" id="sb-role">—</div></div>
-        <svg width="15" height="15" viewBox="0 0 18 18" fill="none" style="color:var(--ink4);flex-shrink:0"><path d="M6.5 4.5l5 4.5-5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="user-chip" onclick="openProfile()" title="Mijn profiel — klik om je gegevens en functie aan te passen" style="flex:1;min-width:0">
+          <div class="avatar" id="sb-av">CS</div>
+          <div class="user-meta" style="min-width:0"><div class="user-name" id="sb-name">—</div><div class="user-role" id="sb-role">—</div></div>
+        </button>
+        <button onclick="logout()" title="Uitloggen" style="flex-shrink:0;width:36px;height:36px;border:1px solid var(--line);background:var(--surface);border-radius:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink3);transition:all 0.13s" onmouseover="this.style.background='var(--crit-soft)';this.style.color='var(--crit)';this.style.borderColor='var(--crit)'" onmouseout="this.style.background='var(--surface)';this.style.color='var(--ink3)';this.style.borderColor='var(--line)'">
+          <svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path d="M7 15H4a1.5 1.5 0 01-1.5-1.5v-9A1.5 1.5 0 014 3h3M11.5 12l3-3-3-3M14 9H6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
     </div>
   </aside>
   <div id="main-wrap">
@@ -669,10 +673,13 @@ async function dbEmailExists(email){
 // Maakt het mapping-object dat de app intern gebruikt vanuit een database-rij
 function mapUser(row){
   const role=row.rol||'';
+  const functie=row.functie||'';
   const email=(row.email||'').toLowerCase();
   const naam=(row.naam||'').toLowerCase();
-  // Teamlead/beheerder krijgt de beheer-tabs (import, export, risico-instellingen)
-  const lead = role.includes('Teamlead') || ADMIN_EMAILS.includes(email) || naam.includes('hamza aberkane');
+  // Teamlead/beheerder krijgt de beheer-tabs (import, export, risico-instellingen).
+  // We kijken naar zowel de rol als de functie: iemand met "Teamlead" in zijn functie
+  // (bijv. "Customer Success Teamlead") krijgt dezelfde rechten als de beheerder.
+  const lead = role.includes('Teamlead') || functie.includes('Teamlead') || ADMIN_EMAILS.includes(email) || naam.includes('hamza aberkane');
   const basis=["dashboard","klanten","alerts","audit"];
   const beheer=["import","export","risico"];
   return {
@@ -688,6 +695,7 @@ const ADMIN_EMAILS=["hamza.aberkane@visma.com","h.aberkanee@gmail.com"];
 function isTeamlead(){
   if(!ME)return false;
   if(ME.role&&ME.role.includes('Teamlead'))return true;
+  if(ME.functie&&ME.functie.includes('Teamlead'))return true;
   if(ME.email&&ADMIN_EMAILS.includes(ME.email.toLowerCase()))return true;
   if(ME.name&&ME.name.toLowerCase().includes('hamza aberkane'))return true;
   return false;
@@ -2072,8 +2080,10 @@ function renderChurnPickerList(){
 }
 async function markChurned(id){
   const c=CUSTOMERS.find(x=>x.id===id);if(!c)return;
+  const redenTekst=c.risk.flags&&c.risk.flags.length?c.risk.flags[0].m:'Handmatig gemarkeerd als gechurnd';
+  const mrr=Math.round(c.bedrag[c.bedrag.length-1]);
   // voeg toe aan gechurnd
-  CHURNED.unshift({id:c.id,branche:c.branche,reden:c.risk.flags&&c.risk.flags.length?c.risk.flags[0]:'Handmatig gemarkeerd als gechurnd',mrr:Math.round(c.bedrag[c.bedrag.length-1])});
+  CHURNED.unshift({id:c.id,branche:c.branche,reden:redenTekst,mrr});
   // haal uit actieve klanten
   CUSTOMERS=CUSTOMERS.filter(x=>x.id!==id);
   URGENT=URGENT.filter(x=>x.id!==id);
@@ -2084,6 +2094,59 @@ async function markChurned(id){
   renderChurnPicker();
   render();
   showToast(id+' gemarkeerd als gechurnd.','success');
+  sendChurnBriefing(c, redenTekst, mrr); // briefing naar portaalgebruikers
+}
+// Klant direct als gechurnd markeren vanuit het klantdetail, met een opgegeven reden.
+async function churnFromDetail(id){
+  const c=CUSTOMERS.find(x=>x.id===id);if(!c)return;
+  const standaard=c.risk.flags&&c.risk.flags.length?c.risk.flags[0].m:'';
+  const reden=window.prompt('Reden van churn voor '+id+' (optioneel — wordt ook in de e-mailbriefing vermeld):', standaard);
+  if(reden===null)return; // geannuleerd
+  const redenTekst=(reden&&reden.trim())?reden.trim():(standaard||'Handmatig gemarkeerd als gechurnd');
+  const mrr=Math.round(c.bedrag[c.bedrag.length-1]);
+  // toevoegen aan gechurnd met de opgegeven reden
+  CHURNED.unshift({id:c.id,branche:c.branche,reden:redenTekst,mrr});
+  CUSTOMERS=CUSTOMERS.filter(x=>x.id!==id);
+  URGENT=URGENT.filter(x=>x.id!==id);
+  if(sb){try{await sb.from('klanten').update({status:'gechurnd'}).eq('klantcode',id);}catch(e){console.error('Churn-status opslaan:',e);}}
+  logAction('Klant gemarkeerd als gechurnd',id);
+  closeDetail();
+  rebuildCustomers(CUSTOMERS);
+  render();
+  showToast(id+' gemarkeerd als gechurnd.','success');
+  // e-mailbriefing naar alle portaalgebruikers
+  sendChurnBriefing(c, redenTekst, mrr);
+}
+// Stuur een korte briefing naar alle gebruikers van het portaal wanneer een klant churnt.
+async function sendChurnBriefing(c, reden, mrr){
+  if(typeof emailjs==='undefined'){console.warn('EmailJS niet beschikbaar — briefing overgeslagen');return;}
+  // verzamel de e-mailadressen van alle geregistreerde gebruikers
+  let ontvangers=(ALL_USERS||[]).map(u=>u.email).filter(Boolean);
+  ontvangers=[...new Set(ontvangers)];
+  if(!ontvangers.length){console.warn('Geen ontvangers voor churn-briefing');return;}
+  const door=ME?ME.name:'een teamlid';
+  const datum=new Date().toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'});
+  const onderwerp='Klant gechurnd: '+c.id;
+  const bericht=
+    'Beste collega,\n\n'+
+    'Er is zojuist een klant als gechurnd gemarkeerd in ChurnGuard.\n\n'+
+    'Klant: '+c.id+'\n'+
+    'Branche: '+c.branche+'\n'+
+    'Verloren maandomzet (MRR): '+H.eur(mrr)+'\n'+
+    'Reden: '+reden+'\n'+
+    'Gemarkeerd door: '+door+'\n'+
+    'Datum: '+datum+'\n\n'+
+    'Bekijk de details in het ChurnGuard-dashboard: https://www.churnguardbrincr.nl\n\n'+
+    'Dit is een automatische melding vanuit ChurnGuard.';
+  // verstuur naar elke ontvanger (de gebruikte template vult to_email/code-velden)
+  let ok=0;
+  for(const email of ontvangers){
+    try{
+      await emailjs.send(EMAILJS_SERVICE,EMAILJS_TEMPLATE,{to_email:email,email:email,code:bericht,subject:onderwerp,message:bericht,klant:c.id});
+      ok++;
+    }catch(e){console.error('Briefing versturen mislukt naar',email,e);}
+  }
+  if(ok>0)showToast('Churn-briefing verstuurd naar '+ok+' gebruiker'+(ok===1?'':'s')+'.','success');
 }
 async function unchurn(id){
   CHURNED=CHURNED.filter(c=>c.id!==id);
@@ -2126,8 +2189,9 @@ function quickNote(id){
 }
 function openDetail(id){
   const c=CUSTOMERS.find(x=>x.id===id);if(!c)return;const {risk}=c;const MO=['Jan','Feb','Mrt','Apr','Mei','Jun'];
+  const lead=isTeamlead();
   document.getElementById('detail-sheet').innerHTML=`
-    <div class="card-head" style="position:sticky;top:0;background:var(--surface);z-index:5;border-radius:var(--rx) var(--rx) 0 0"><div style="display:flex;align-items:center;gap:14px">${H.ring(risk.score,risk.color,58)}<div><div class="card-sub" style="margin-bottom:2px">Klantdetail</div><div style="font-size:19px;font-weight:800;letter-spacing:-0.03em">${c.id}</div><div style="margin-top:5px">${H.badge(risk)}</div></div></div><button class="tb-btn" onclick="closeDetail()" style="box-shadow:none">✕</button></div>
+    <div class="card-head" style="position:sticky;top:0;background:var(--surface);z-index:5;border-radius:var(--rx) var(--rx) 0 0"><div style="display:flex;align-items:center;gap:14px">${H.ring(risk.score,risk.color,58)}<div><div class="card-sub" style="margin-bottom:2px">Klantdetail</div><div style="font-size:19px;font-weight:800;letter-spacing:-0.03em">${c.id}</div><div style="margin-top:5px">${H.badge(risk)}</div></div></div><div style="display:flex;align-items:center;gap:8px">${lead?`<button class="btn btn-gh" onclick="churnFromDetail('${c.id}')" title="Deze klant als gechurnd markeren" style="padding:7px 13px;font-size:12.5px;color:var(--crit);border-color:var(--crit-soft)">Markeer als gechurnd</button>`:''}<button class="tb-btn" onclick="closeDetail()" style="box-shadow:none">✕</button></div></div>
     <div style="padding:21px;display:flex;flex-direction:column;gap:18px">
       <div style="display:flex;gap:7px;flex-wrap:wrap">${[c.branche,c.sub,c.onb?'Onboarding ✓':'Geen onboarding',c.partner?'Via partner':'Direct',H.eur(c.bedrag[5])+'/mnd'].map(t=>`<span class="tag">${t}</span>`).join('')}</div>
       <div class="g3">${[['Orders nu',risk.recent,'gem. '+risk.avg,risk.recent<risk.avg*0.7],['Inactief',c.act+'d',c.act>=30?'Alert actief':'Normaal',c.act>=30],['Koppeling',c.kop?'Actief':'Geen',c.kop?'Gezond':'Risico',!c.kop]].map(([l,v,s,a])=>`<div style="background:var(--s2);border:1px solid ${a?'var(--high)':'var(--line)'};border-radius:var(--r);padding:13px 15px"><div style="font-size:10.5px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">${l}</div><div style="font-size:20px;font-weight:800;letter-spacing:-0.03em;color:${a?'var(--high)':'var(--ink)'}">${v}</div><div style="font-size:11.5px;color:${a?'var(--high)':'var(--ink3)'};margin-top:2px">${s}</div></div>`).join('')}</div>
